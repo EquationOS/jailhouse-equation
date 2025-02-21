@@ -1,3 +1,5 @@
+OBJECT_FILES_NON_STANDARD := y
+
 LD = $(CC) $(KBUILD_CFLAGS)
 NOSTDINC_FLAGS :=
 LINUXINCLUDE := -I$(src)/../driver
@@ -7,7 +9,7 @@ KBUILD_CFLAGS := -g -O3 \
 	-DJAILHOUSE_VERSION=\"$(shell cat $(src)/../VERSION)\"
 KBUILD_LDFLAGS :=
 
-always := jailhouse
+always-y := jailhouse
 
 $(obj)/%: $(obj)/%.o FORCE
 	$(call if_changed,ld)

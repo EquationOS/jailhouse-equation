@@ -25,6 +25,8 @@
 #include <linux/reboot.h>
 #include <linux/io.h>
 #include <linux/cpu.h>
+#include <linux/vmalloc.h>
+#include <linux/mm_types.h>
 #include <asm/barrier.h>
 #include <asm/smp.h>
 #include <asm/cacheflush.h>
@@ -33,6 +35,8 @@
 #include "cell-config.h"
 #include "jailhouse.h"
 #include "hypercall.h"
+#include "compat.h"
+#include "pgalloc-track.h"
 
 #ifdef CONFIG_X86_32
 #error 64-bit kernel required!
@@ -72,7 +76,11 @@ static int error_code;
 static struct resource *hypervisor_mem_res;
 static struct mem_region hv_region, rt_region;
 
+struct mm_struct *init_mm_sym;
+
 static typeof(ioremap_page_range) *ioremap_page_range_sym;
+static typeof(__get_vm_area_caller) *__get_vm_area_caller_sym;
+// static typeof(__pte_alloc_kernel) *__pte_alloc_kernel_sym;
 
 static char *hv_size = "";
 module_param(hv_size, charp, S_IRUGO);
@@ -93,9 +101,13 @@ static void init_hypercall(void)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
 #define __get_vm_area(size, flags, start, end)			\
-	__get_vm_area_caller(size, flags, start, end,		\
+	__get_vm_area_caller_sym(size, flags, start, end,		\
 			     __builtin_return_address(0))
 #endif
+
+void *jailhouse_ioremap(phys_addr_t phys, unsigned long virt,
+	unsigned long size);
+int get_rt_memory_region(struct mem_region *region);
 
 void *jailhouse_ioremap(phys_addr_t phys, unsigned long virt,
 			unsigned long size)
@@ -113,7 +125,12 @@ void *jailhouse_ioremap(phys_addr_t phys, unsigned long virt,
 		return NULL;
 	vma->phys_addr = phys;
 
-	if (ioremap_page_range_sym((unsigned long)vma->addr,
+	pr_err("[JAILHOUSE] jailhouse_ioremap: 0x%llx - 0x%llx\n", phys, phys + size);
+
+	pr_err("[JAILHOUSE] ioremap_page_range_sym: 0x%lx - 0x%lx\n", 
+		(unsigned long)vma->addr, (unsigned long)vma->addr + size);
+
+	if (jailhouse_ioremap_page_range((unsigned long)vma->addr,
 				   (unsigned long)vma->addr + size, phys,
 				   PAGE_KERNEL_EXEC)) {
 		vunmap(vma->addr);
@@ -725,11 +742,12 @@ static int __init jailhouse_init(void)
 {
 	int err;
 
-#if defined(CONFIG_KALLSYMS_ALL) && LINUX_VERSION_CODE < KERNEL_VERSION(5,7,0)
+#if defined(CONFIG_KALLSYMS_ALL) // && LINUX_VERSION_CODE < KERNEL_VERSION(5,7,0)
 #define __RESOLVE_EXTERNAL_SYMBOL(symbol)			\
-	symbol##_sym = (void *)kallsyms_lookup_name(#symbol);	\
-	if (!symbol##_sym)					\
-		return -EINVAL
+	symbol##_sym = (void *)generic_kallsyms_lookup_name(#symbol);	\
+	if (!symbol##_sym) {					\
+		pr_err("Failed to resolve symbol %s\n", #symbol);	\
+		return -EINVAL; }
 #else
 #define __RESOLVE_EXTERNAL_SYMBOL(symbol)			\
 	symbol##_sym = &symbol
@@ -737,6 +755,17 @@ static int __init jailhouse_init(void)
 #define RESOLVE_EXTERNAL_SYMBOL(symbol...) __RESOLVE_EXTERNAL_SYMBOL(symbol)
 
 	RESOLVE_EXTERNAL_SYMBOL(ioremap_page_range);
+	RESOLVE_EXTERNAL_SYMBOL(__get_vm_area_caller);
+	RESOLVE_EXTERNAL_SYMBOL(__pte_alloc_kernel);
+	RESOLVE_EXTERNAL_SYMBOL(pud_free_pmd_page);
+	RESOLVE_EXTERNAL_SYMBOL(pmd_set_huge);
+	RESOLVE_EXTERNAL_SYMBOL(pud_set_huge);
+	RESOLVE_EXTERNAL_SYMBOL(pmd_free_pte_page);
+	RESOLVE_EXTERNAL_SYMBOL(__p4d_alloc);
+	RESOLVE_EXTERNAL_SYMBOL(__pud_alloc);
+	RESOLVE_EXTERNAL_SYMBOL(__pmd_alloc);
+
+	init_mm_sym = (struct mm_struct *) generic_kallsyms_lookup_name("init_mm");
 
 	jailhouse_dev = root_device_register("jailhouse");
 	if (IS_ERR(jailhouse_dev))

@@ -1,3 +1,5 @@
+PORT ?= 2334
+
 # Check make version
 need := 3.82
 ifneq ($(need),$(firstword $(sort $(MAKE_VERSION) $(need))))
@@ -21,4 +23,8 @@ kbuild = -C $(KDIR) M=$$PWD $@
 modules clean:
 	$(Q)$(MAKE) $(kbuild)
 
-.PHONY: modules clean
+ssh:
+	ssh -p $(PORT) ubuntu@localhost
+
+
+.PHONY: modules clean ssh
