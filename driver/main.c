@@ -36,7 +36,7 @@
 #include "jailhouse.h"
 #include "hypercall.h"
 #include "compat.h"
-#include "pgalloc-track.h"
+#include "ioremap.h"
 
 #ifdef CONFIG_X86_32
 #error 64-bit kernel required!
@@ -76,11 +76,8 @@ static int error_code;
 static struct resource *hypervisor_mem_res;
 static struct mem_region hv_region, rt_region;
 
-struct mm_struct *init_mm_sym;
-
 static typeof(ioremap_page_range) *ioremap_page_range_sym;
 static typeof(__get_vm_area_caller) *__get_vm_area_caller_sym;
-// static typeof(__pte_alloc_kernel) *__pte_alloc_kernel_sym;
 
 static char *hv_size = "";
 module_param(hv_size, charp, S_IRUGO);
@@ -127,9 +124,6 @@ void *jailhouse_ioremap(phys_addr_t phys, unsigned long virt,
 
 	pr_err("[JAILHOUSE] jailhouse_ioremap: 0x%llx - 0x%llx\n", phys, phys + size);
 
-	pr_err("[JAILHOUSE] ioremap_page_range_sym: 0x%lx - 0x%lx\n", 
-		(unsigned long)vma->addr, (unsigned long)vma->addr + size);
-
 	if (jailhouse_ioremap_page_range((unsigned long)vma->addr,
 				   (unsigned long)vma->addr + size, phys,
 				   PAGE_KERNEL_EXEC)) {
@@ -164,6 +158,8 @@ static void enter_hypervisor(void *info)
 	int err;
 
 	entry = header->entry + (unsigned long) hypervisor_mem;
+
+	pr_err("Entering hypervisor at CPU [%d], entry %lx\n", cpu, (unsigned long)entry);
 
 	if (cpu < header->max_cpus)
 		/* either returns 0 or the same error code across all CPUs */
@@ -533,7 +529,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 			cpumask_set_cpu(cpu, &vm_cpus_mask);
 		}
 	}
-	pr_info("Before entering hypervisor: max_cpus=%d, rt_cpus=%d, num_online_cpus=%d\n",
+	pr_err("Before entering hypervisor: max_cpus=%d, rt_cpus=%d, num_online_cpus=%d\n",
 		max_cpus, rt_cpus, num_online_cpus());
 
 	/*
@@ -747,7 +743,9 @@ static int __init jailhouse_init(void)
 	symbol##_sym = (void *)generic_kallsyms_lookup_name(#symbol);	\
 	if (!symbol##_sym) {					\
 		pr_err("Failed to resolve symbol %s\n", #symbol);	\
-		return -EINVAL; }
+		return -EINVAL; } \
+	else { \
+		pr_err("Resolved symbol %s: 0x%lx\n", #symbol, (unsigned long)symbol##_sym); }
 #else
 #define __RESOLVE_EXTERNAL_SYMBOL(symbol)			\
 	symbol##_sym = &symbol

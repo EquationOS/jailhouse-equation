@@ -4,21 +4,12 @@
 
 #include <linux/mm.h>
 
-extern struct mm_struct *init_mm_sym;
-
-static typeof(__pte_alloc_kernel) *__pte_alloc_kernel_sym;
-static typeof(pud_free_pmd_page) *pud_free_pmd_page_sym;
-static typeof(pmd_set_huge) *pmd_set_huge_sym;
-static typeof(pud_set_huge) *pud_set_huge_sym;
-static typeof(pmd_free_pte_page) *pmd_free_pte_page_sym;
-static typeof(__p4d_alloc) *__p4d_alloc_sym;
-static typeof(__pud_alloc) *__pud_alloc_sym;
-static typeof(__pmd_alloc) *__pmd_alloc_sym;
-int jailhouse_ioremap_page_range(
-	unsigned long addr, unsigned long end, phys_addr_t phys_addr, pgprot_t prot);
+extern typeof(__p4d_alloc) *__p4d_alloc_sym;
+extern typeof(__pud_alloc) *__pud_alloc_sym;
+extern typeof(__pmd_alloc) *__pmd_alloc_sym;
 
 #if defined(CONFIG_MMU)
-static inline p4d_t *p4d_get(struct mm_struct *mm, pgd_t *pgd,
+static inline p4d_t *p4d_alloc_track(struct mm_struct *mm, pgd_t *pgd,
 				     unsigned long address,
 				     pgtbl_mod_mask *mod_mask)
 {
@@ -31,7 +22,7 @@ static inline p4d_t *p4d_get(struct mm_struct *mm, pgd_t *pgd,
 	return p4d_offset(pgd, address);
 }
 
-static inline pud_t *pud_get(struct mm_struct *mm, p4d_t *p4d,
+static inline pud_t *pud_alloc_track(struct mm_struct *mm, p4d_t *p4d,
 				     unsigned long address,
 				     pgtbl_mod_mask *mod_mask)
 {
@@ -44,7 +35,7 @@ static inline pud_t *pud_get(struct mm_struct *mm, p4d_t *p4d,
 	return pud_offset(p4d, address);
 }
 
-static inline pmd_t *pmd_get(struct mm_struct *mm, pud_t *pud,
+static inline pmd_t *pmd_alloc_track(struct mm_struct *mm, pud_t *pud,
 				     unsigned long address,
 				     pgtbl_mod_mask *mod_mask)
 {

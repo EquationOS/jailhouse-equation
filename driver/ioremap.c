@@ -5,7 +5,7 @@
 #include <linux/pgtable.h>
 #include <linux/vmalloc.h>
 
-#include "pgalloc-track.h"
+#include "ioremap.h"
 
 #ifdef CONFIG_HAVE_ARCH_HUGE_VMAP
 static unsigned int ioremap_max_page_shift = BITS_PER_LONG - 1;
@@ -13,6 +13,16 @@ static unsigned int ioremap_max_page_shift = BITS_PER_LONG - 1;
 static const unsigned int ioremap_max_page_shift = PAGE_SHIFT;
 #endif	/* CONFIG_HAVE_ARCH_HUGE_VMAP */
 
+struct mm_struct *init_mm_sym;
+
+typeof(__pte_alloc_kernel) *__pte_alloc_kernel_sym;
+typeof(pud_free_pmd_page) *pud_free_pmd_page_sym;
+typeof(pmd_set_huge) *pmd_set_huge_sym;
+typeof(pud_set_huge) *pud_set_huge_sym;
+typeof(pmd_free_pte_page) *pmd_free_pte_page_sym;
+typeof(__p4d_alloc) *__p4d_alloc_sym;
+typeof(__pud_alloc) *__pud_alloc_sym;
+typeof(__pmd_alloc) *__pmd_alloc_sym;
 
 /*** Page table manipulation functions ***/
 static int vmap_pte_range(
@@ -26,6 +36,7 @@ static int vmap_pte_range(
 
 	pfn = phys_addr >> PAGE_SHIFT;
 	pte = pte_alloc_kernel_track(pmd, addr, mask);
+
 	if (!pte)
 		return -ENOMEM;
 	do
@@ -91,7 +102,8 @@ static int vmap_pmd_range(
 	pmd_t *pmd;
 	unsigned long next;
 
-	pmd = pmd_get(init_mm_sym, pud, addr, mask);
+	pmd = pmd_alloc_track(init_mm_sym, pud, addr, mask);
+
 	if (!pmd)
 		return -ENOMEM;
 	do
@@ -142,8 +154,8 @@ static int vmap_pud_range(
 {
 	pud_t *pud;
 	unsigned long next;
+	pud = pud_alloc_track(init_mm_sym, p4d, addr, mask);
 
-	pud = pud_get(init_mm_sym, p4d, addr, mask);
 	if (!pud)
 		return -ENOMEM;
 	do
@@ -195,7 +207,8 @@ static int vmap_p4d_range(
 	p4d_t *p4d;
 	unsigned long next;
 
-	p4d = p4d_get(init_mm_sym, pgd, addr, mask);
+	p4d = p4d_alloc_track(init_mm_sym, pgd, addr, mask);
+
 	if (!p4d)
 		return -ENOMEM;
 	do
@@ -231,6 +244,7 @@ static int vmap_range_noflush(
 	start = addr;
 	// pgd = pgd_offset_k(addr);
     pgd = pgd_offset(init_mm_sym, addr);
+
 	do
 	{
 		next = pgd_addr_end(addr, end);

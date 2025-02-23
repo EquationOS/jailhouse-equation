@@ -12,6 +12,7 @@
 *.dtb.S
 *.dtb.*.tmp
 *.8
+*.o.d
 .cache.mk
 Module.symvers
 modules.order
