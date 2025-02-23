@@ -443,10 +443,10 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	}
 	dump_mem_regions(mem_regions, num_mem_regions);
 
-	pr_info("hypervisor memory region: [0x%llx-0x%llx], 0x%llx\n",
+	pr_err("hypervisor memory region: [0x%llx-0x%llx], 0x%llx\n",
 		hv_region.start, hv_region.start + hv_region.size - 1,
 		hv_region.size);
-	pr_info("RT memory region: [0x%llx-0x%llx], 0x%llx\n",
+	pr_err("RT memory region: [0x%llx-0x%llx], 0x%llx\n",
 		rt_region.start, rt_region.start + rt_region.size - 1,
 		rt_region.size);
 
@@ -493,6 +493,8 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		goto error_release_memreg;
 	}
 
+	pr_err("hypervisor_mem: 0x%lx\n", (unsigned long)hypervisor_mem);
+
 	/* Copy hypervisor's binary image at beginning of the memory region
 	 * and clear the rest to zero. */
 	memcpy(hypervisor_mem, hypervisor->data, hypervisor->size);
@@ -523,11 +525,11 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 
 	cpumask_clear(&vm_cpus_mask);
 	for (cpu = 0; cpu < max_cpus; cpu++) {
-		if (cpu >= max_cpus - rt_cpus) {
-			cpu_down(cpu);
-		} else {
-			cpumask_set_cpu(cpu, &vm_cpus_mask);
-		}
+		// if (cpu >= max_cpus - rt_cpus) {
+		// 	cpu_down(cpu);
+		// } else {
+		cpumask_set_cpu(cpu, &vm_cpus_mask);
+		// }
 	}
 	pr_err("Before entering hypervisor: max_cpus=%d, rt_cpus=%d, num_online_cpus=%d\n",
 		max_cpus, rt_cpus, num_online_cpus());
