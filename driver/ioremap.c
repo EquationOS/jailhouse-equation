@@ -9,9 +9,9 @@
 
 #ifdef CONFIG_HAVE_ARCH_HUGE_VMAP
 static unsigned int ioremap_max_page_shift = BITS_PER_LONG - 1;
-#else /* CONFIG_HAVE_ARCH_HUGE_VMAP */
+#else  /* CONFIG_HAVE_ARCH_HUGE_VMAP */
 static const unsigned int ioremap_max_page_shift = PAGE_SHIFT;
-#endif	/* CONFIG_HAVE_ARCH_HUGE_VMAP */
+#endif /* CONFIG_HAVE_ARCH_HUGE_VMAP */
 
 struct mm_struct *init_mm_sym;
 
@@ -243,7 +243,7 @@ static int vmap_range_noflush(
 
 	start = addr;
 	// pgd = pgd_offset_k(addr);
-    pgd = pgd_offset(init_mm_sym, addr);
+	pgd = pgd_offset(init_mm_sym, addr);
 
 	do
 	{
@@ -265,8 +265,8 @@ int jailhouse_ioremap_page_range(
 {
 	int err;
 
-	err = vmap_range_noflush(
-		addr, end, phys_addr, prot, ioremap_max_page_shift);
+	err =
+		vmap_range_noflush(addr, end, phys_addr, prot, ioremap_max_page_shift);
 	flush_cache_vmap(addr, end);
 	if (!err)
 		err = kmsan_ioremap_page_range(

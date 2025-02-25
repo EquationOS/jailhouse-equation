@@ -15,28 +15,28 @@
 /* For compatibility with older kernel versions */
 #include <linux/version.h>
 
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/miscdevice.h>
+#include <asm/barrier.h>
+#include <asm/cacheflush.h>
+#include <asm/smp.h>
+#include <asm/tlbflush.h>
+#include <linux/cpu.h>
 #include <linux/firmware.h>
+#include <linux/io.h>
 #include <linux/kallsyms.h>
+#include <linux/kernel.h>
+#include <linux/miscdevice.h>
+#include <linux/mm_types.h>
+#include <linux/module.h>
+#include <linux/reboot.h>
 #include <linux/smp.h>
 #include <linux/uaccess.h>
-#include <linux/reboot.h>
-#include <linux/io.h>
-#include <linux/cpu.h>
 #include <linux/vmalloc.h>
-#include <linux/mm_types.h>
-#include <asm/barrier.h>
-#include <asm/smp.h>
-#include <asm/cacheflush.h>
-#include <asm/tlbflush.h>
 
 #include "cell-config.h"
-#include "jailhouse.h"
-#include "hypercall.h"
 #include "compat.h"
+#include "hypercall.h"
 #include "ioremap.h"
+#include "jailhouse.h"
 
 #ifdef CONFIG_X86_32
 #error 64-bit kernel required!
@@ -46,12 +46,13 @@
 #define MSR_IA32_FEAT_CTL MSR_IA32_FEATURE_CONTROL
 #endif
 #ifndef FEAT_CTL_VMX_ENABLED_OUTSIDE_SMX
-#define FEAT_CTL_VMX_ENABLED_OUTSIDE_SMX FEATURE_CONTROL_VMXON_ENABLED_OUTSIDE_SMX
+#define FEAT_CTL_VMX_ENABLED_OUTSIDE_SMX                                       \
+	FEATURE_CONTROL_VMXON_ENABLED_OUTSIDE_SMX
 #endif
 
 #ifdef CONFIG_X86
-#define JAILHOUSE_AMD_FW_NAME	"rvm-amd.bin"
-#define JAILHOUSE_INTEL_FW_NAME	"rvm-intel.bin"
+#define JAILHOUSE_AMD_FW_NAME "rvm-amd.bin"
+#define JAILHOUSE_INTEL_FW_NAME "rvm-intel.bin"
 #endif
 
 MODULE_DESCRIPTION("Management driver for Jailhouse partitioning hypervisor");
@@ -91,42 +92,40 @@ static void init_hypercall(void)
 	jailhouse_use_vmcall = boot_cpu_has(X86_FEATURE_VMX);
 }
 #else /* !CONFIG_X86 */
-static void init_hypercall(void)
-{
-}
+static void init_hypercall(void) {}
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
-#define __get_vm_area(size, flags, start, end)			\
-	__get_vm_area_caller_sym(size, flags, start, end,		\
-			     __builtin_return_address(0))
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
+#define __get_vm_area(size, flags, start, end)                                 \
+	__get_vm_area_caller_sym(                                                  \
+		size, flags, start, end, __builtin_return_address(0))
 #endif
 
-void *jailhouse_ioremap(phys_addr_t phys, unsigned long virt,
-	unsigned long size);
+void *
+jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size);
 int get_rt_memory_region(struct mem_region *region);
 
-void *jailhouse_ioremap(phys_addr_t phys, unsigned long virt,
-			unsigned long size)
+void *
+jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
 {
 	struct vm_struct *vma;
 
 	size = PAGE_ALIGN(size);
 	if (virt)
-		vma = __get_vm_area(size, VM_IOREMAP, virt,
-				    virt + size + PAGE_SIZE);
+		vma = __get_vm_area(size, VM_IOREMAP, virt, virt + size + PAGE_SIZE);
 	else
-		vma = __get_vm_area(size, VM_IOREMAP, VMALLOC_START,
-				    VMALLOC_END);
+		vma = __get_vm_area(size, VM_IOREMAP, VMALLOC_START, VMALLOC_END);
 	if (!vma)
 		return NULL;
 	vma->phys_addr = phys;
 
-	pr_err("[JAILHOUSE] jailhouse_ioremap: 0x%llx - 0x%llx\n", phys, phys + size);
+	pr_err(
+		"[JAILHOUSE] jailhouse_ioremap: 0x%llx - 0x%llx\n", phys, phys + size);
 
-	if (jailhouse_ioremap_page_range((unsigned long)vma->addr,
-				   (unsigned long)vma->addr + size, phys,
-				   PAGE_KERNEL_EXEC)) {
+	if (jailhouse_ioremap_page_range(
+			(unsigned long)vma->addr, (unsigned long)vma->addr + size, phys,
+			PAGE_KERNEL_EXEC))
+	{
 		vunmap(vma->addr);
 		return NULL;
 	}
@@ -134,10 +133,14 @@ void *jailhouse_ioremap(phys_addr_t phys, unsigned long virt,
 	return vma->addr;
 }
 
-int get_rt_memory_region(struct mem_region *region) {
-	if (!rt_region.start || !rt_region.size) {
+int get_rt_memory_region(struct mem_region *region)
+{
+	if (!rt_region.start || !rt_region.size)
+	{
 		return -EBUSY;
-	} else {
+	}
+	else
+	{
 		*region = rt_region;
 		return 0;
 	}
@@ -157,9 +160,7 @@ static void enter_hypervisor(void *info)
 	int (*entry)(unsigned int);
 	int err;
 
-	entry = header->entry + (unsigned long) hypervisor_mem;
-
-	pr_err("Entering hypervisor at CPU [%d], entry %lx\n", cpu, (unsigned long)entry);
+	entry = header->entry + (unsigned long)hypervisor_mem;
 
 	if (cpu < header->max_cpus)
 		/* either returns 0 or the same error code across all CPUs */
@@ -170,10 +171,11 @@ static void enter_hypervisor(void *info)
 	if (err)
 		error_code = err;
 
-#if defined(CONFIG_X86) && LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0)
+#if defined(CONFIG_X86) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
 	/* on Intel, VMXE is now on - update the shadow */
-	if (boot_cpu_has(X86_FEATURE_VMX) && !err) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
+	if (boot_cpu_has(X86_FEATURE_VMX) && !err)
+	{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 5, 0)
 		cr4_set_bits_irqsoff(X86_CR4_VMXE);
 #else
 		cr4_set_bits(X86_CR4_VMXE);
@@ -184,7 +186,7 @@ static void enter_hypervisor(void *info)
 	atomic_inc(&call_done);
 }
 
-static inline const char * jailhouse_get_fw_name(void)
+static inline const char *jailhouse_get_fw_name(void)
 {
 #ifdef CONFIG_X86
 	if (boot_cpu_has(X86_FEATURE_SVM))
@@ -197,8 +199,10 @@ static inline const char * jailhouse_get_fw_name(void)
 
 static void jailhouse_firmware_free(void)
 {
-	if (hypervisor_mem_res) {
-		release_mem_region(hypervisor_mem_res->start, resource_size(hypervisor_mem_res));
+	if (hypervisor_mem_res)
+	{
+		release_mem_region(
+			hypervisor_mem_res->start, resource_size(hypervisor_mem_res));
 		hypervisor_mem_res = NULL;
 	}
 	vunmap(hypervisor_mem);
@@ -212,7 +216,8 @@ static int get_iomem_num(void)
 
 	num = 0;
 	child = iomem_resource.child;
-	while (child) {
+	while (child)
+	{
 		num++;
 		child = child->sibling;
 	}
@@ -224,17 +229,16 @@ static inline unsigned long long mem_region_flag(const char *name)
 {
 	if (!strcmp(name, "System RAM") || !strcmp(name, "RAM buffer"))
 		return JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE |
-		       JAILHOUSE_MEM_EXECUTE | JAILHOUSE_MEM_DMA;
+			   JAILHOUSE_MEM_EXECUTE | JAILHOUSE_MEM_DMA;
 	else if (!strcmp(name, "Reserved"))
-		return JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE |
-		       JAILHOUSE_MEM_EXECUTE;
+		return JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE | JAILHOUSE_MEM_EXECUTE;
 	else
 		return JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE;
 }
 
-static bool get_mem_region_one(struct mem_region *region, const char *name,
-			       struct mem_region *reserved,
-			       struct jailhouse_memory *regions, int *num)
+static bool get_mem_region_one(
+	struct mem_region *region, const char *name, struct mem_region *reserved,
+	struct jailhouse_memory *regions, int *num)
 {
 	unsigned long long flags = 0, l_start = 0, l_end = 0;
 	unsigned long long s = region->start;
@@ -244,48 +248,61 @@ static bool get_mem_region_one(struct mem_region *region, const char *name,
 	bool ok = true;
 	int l_index = 0;
 
-	if (s == e) {
+	if (s == e)
+	{
 		return true;
 	}
 
-	if (s <= res_start && res_end <= e) {
-		if (strcmp(name, "Reserved")) {
+	if (s <= res_start && res_end <= e)
+	{
+		if (strcmp(name, "Reserved"))
+		{
 			return false;
 		}
-		if (s < res_start) {
+		if (s < res_start)
+		{
 			region->start = s;
 			region->size = res_start - s;
 			ok = get_mem_region_one(region, name, reserved, regions, num);
 		}
-		if (ok && res_end < e) {
+		if (ok && res_end < e)
+		{
 			region->start = res_end;
 			region->size = e - res_end;
 			ok = get_mem_region_one(region, name, reserved, regions, num);
 		}
 		return ok;
-	} else if (!(e <= res_start || res_end <= s)) {
+	}
+	else if (!(e <= res_start || res_end <= s))
+	{
 		pr_err("overlapped with reserved region");
 		return false;
 	}
 
 	s = round_down(s, PAGE_SIZE);
 	e = round_up(e, PAGE_SIZE) - 1;
-	if ((*num) == 0) {
+	if ((*num) == 0)
+	{
 		l_start = 0;
 		l_end = 0;
-	} else {
+	}
+	else
+	{
 		l_index = (*num) - 1;
 		l_start = regions[l_index].phys_start;
 		l_end = regions[l_index].phys_start + regions[l_index].size - 1;
 	}
 	// check if current region is overlapped with last one
-	if (s < l_end) {
-		pr_debug("overlap last:(0x%llx 0x%llx) now:(0x%llx 0x%llx)\n",
-		       l_start, l_end, s, e);
+	if (s < l_end)
+	{
+		pr_debug(
+			"overlap last:(0x%llx 0x%llx) now:(0x%llx 0x%llx)\n", l_start,
+			l_end, s, e);
 		s = min(s, l_start);
 		e = max(e, l_end);
 		// the flags of the merged regions should be OR of two flags of regions
-		// for example:  SYSRAM merge with RESERVED region, the merged.flags = SYSRAM.flags |  RESERVED.flags
+		// for example:  SYSRAM merge with RESERVED region, the merged.flags =
+		// SYSRAM.flags |  RESERVED.flags
 		flags = regions[l_index].flags;
 		(*num)--;
 	}
@@ -294,10 +311,10 @@ static bool get_mem_region_one(struct mem_region *region, const char *name,
 	regions[*num].virt_start = s;
 	regions[*num].size = e - s + 1;
 	regions[*num].flags = flags | mem_region_flag(name);
-	pr_debug("add region %d: %s [0x%llx..0x%llx] 0x%llx\n",
-		 *num, name, regions[*num].phys_start,
-		 regions[*num].phys_start + regions[*num].size - 1,
-		 regions[*num].flags);
+	pr_debug(
+		"add region %d: %s [0x%llx..0x%llx] 0x%llx\n", *num, name,
+		regions[*num].phys_start,
+		regions[*num].phys_start + regions[*num].size - 1, regions[*num].flags);
 	(*num)++;
 
 	return true;
@@ -308,19 +325,22 @@ static bool get_mem_region_one(struct mem_region *region, const char *name,
  *
  * The start and end addr of memory regions must be PAGE_SIZE align.
  */
-static int get_mem_regions(struct jailhouse_memory *regions,
-			   struct mem_region *reserved)
+static int
+get_mem_regions(struct jailhouse_memory *regions, struct mem_region *reserved)
 {
 	int num = 0;
 	struct resource *child = iomem_resource.child;
 
-	while (child) {
+	while (child)
+	{
 		struct mem_region region;
 		region.start = child->start;
 		region.size = child->end - child->start + 1;
-		pr_debug("found region: %s [0x%llx..0x%llx]\n", child->name,
-			 region.start, region.start + region.size - 1);
-		if (!get_mem_region_one(&region, child->name, reserved, regions, &num)) {
+		pr_debug(
+			"found region: %s [0x%llx..0x%llx]\n", child->name, region.start,
+			region.start + region.size - 1);
+		if (!get_mem_region_one(&region, child->name, reserved, regions, &num))
+		{
 			return -1;
 		}
 		child = child->sibling;
@@ -334,38 +354,41 @@ static int get_mem_regions(struct jailhouse_memory *regions,
 static void dump_mem_regions(struct jailhouse_memory *regions, int n)
 {
 	int i;
-	for (i = 0; i < n; i++) {
-		pr_info("region[%d]: [0x%llx - 0x%llx], size=0x%llx, flag=0x%llx\n",
-			i, regions[i].phys_start,
-			regions[i].phys_start + regions[i].size - 1,
+	for (i = 0; i < n; i++)
+	{
+		pr_info(
+			"region[%d]: [0x%llx - 0x%llx], size=0x%llx, flag=0x%llx\n", i,
+			regions[i].phys_start, regions[i].phys_start + regions[i].size - 1,
 			regions[i].size, regions[i].flags);
 	}
 }
 
-static void init_system_config(struct jailhouse_system *config,
-			       struct mem_region *hv_region,
-			       struct mem_region *rt_region,
-			       int num_mem_regions,
-			       struct jailhouse_memory *mem_regions)
+static void init_system_config(
+	struct jailhouse_system *config, struct mem_region *hv_region,
+	struct mem_region *rt_region, int num_mem_regions,
+	struct jailhouse_memory *mem_regions)
 {
 	memset(config, 0, sizeof(*config));
 
-	memcpy(config->signature, JAILHOUSE_SYSTEM_SIGNATURE,
-	       sizeof(config->signature));
+	memcpy(
+		config->signature, JAILHOUSE_SYSTEM_SIGNATURE,
+		sizeof(config->signature));
 	config->revision = JAILHOUSE_CONFIG_REVISION;
 	config->hypervisor_memory.phys_start = hv_region->start;
 	config->hypervisor_memory.size = hv_region->size;
 	config->rtos_memory.phys_start = rt_region->start;
 	config->rtos_memory.size = rt_region->size;
-	memcpy(config->root_cell.signature, JAILHOUSE_CELL_DESC_SIGNATURE,
-	       sizeof(config->root_cell.signature));
+	memcpy(
+		config->root_cell.signature, JAILHOUSE_CELL_DESC_SIGNATURE,
+		sizeof(config->root_cell.signature));
 	config->root_cell.revision = JAILHOUSE_CONFIG_REVISION;
 	strcpy(config->root_cell.name, "linux-root-cell");
 	config->root_cell.id = 0;
 	config->root_cell.num_memory_regions = num_mem_regions;
 
-	memcpy((void *)config + sizeof(*config), mem_regions,
-	       sizeof(*mem_regions) * num_mem_regions);
+	memcpy(
+		(void *)config + sizeof(*config), mem_regions,
+		sizeof(*mem_regions) * num_mem_regions);
 }
 
 /* See Documentation/bootstrap-interface.txt */
@@ -384,20 +407,24 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	struct jailhouse_memory *mem_regions;
 
 	fw_name = jailhouse_get_fw_name();
-	if (!fw_name) {
+	if (!fw_name)
+	{
 		pr_err("jailhouse: Missing or unsupported HVM technology\n");
 		return -ENODEV;
 	}
 
-	if (copy_from_user(&hv_region, &arg->hv_region, sizeof(struct mem_region))) {
+	if (copy_from_user(&hv_region, &arg->hv_region, sizeof(struct mem_region)))
+	{
 		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
 		return -EFAULT;
 	}
-	if (copy_from_user(&rt_region, &arg->rt_region, sizeof(struct mem_region))) {
+	if (copy_from_user(&rt_region, &arg->rt_region, sizeof(struct mem_region)))
+	{
 		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
 		return -EFAULT;
 	}
-	if (!hv_region.size) {
+	if (!hv_region.size)
+	{
 		hv_region.size = 256 << 20; // 256M
 	}
 
@@ -409,11 +436,13 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		goto error_unlock;
 
 #ifdef CONFIG_X86
-	if (boot_cpu_has(X86_FEATURE_VMX)) {
+	if (boot_cpu_has(X86_FEATURE_VMX))
+	{
 		u64 features;
 
 		rdmsrl(MSR_IA32_FEAT_CTL, features);
-		if ((features & FEAT_CTL_VMX_ENABLED_OUTSIDE_SMX) == 0) {
+		if ((features & FEAT_CTL_VMX_ENABLED_OUTSIDE_SMX) == 0)
+		{
 			pr_err("jailhouse: VT-x disabled by Firmware/BIOS\n");
 			err = -ENODEV;
 			goto error_put_module;
@@ -423,7 +452,8 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 
 	/* Load hypervisor image */
 	err = request_firmware(&hypervisor, fw_name, jailhouse_dev);
-	if (err) {
+	if (err)
+	{
 		pr_err("jailhouse: Missing hypervisor image %s\n", fw_name);
 		goto error_put_module;
 	}
@@ -431,30 +461,34 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	/* Get memory regions */
 	num_iomem = get_iomem_num();
 	mem_regions = kvmalloc(sizeof(*mem_regions) * num_iomem, GFP_KERNEL);
-	if (!mem_regions) {
+	if (!mem_regions)
+	{
 		err = -ENOMEM;
 		goto error_release_fw;
 	}
 	num_mem_regions = get_mem_regions(mem_regions, &hv_region);
-	if (num_mem_regions == -1) {
+	if (num_mem_regions == -1)
+	{
 		err = -EINVAL;
 		pr_err("hypervisor memory is overlapped with other memory regions\n");
 		goto error_free_mem_regions;
 	}
 	dump_mem_regions(mem_regions, num_mem_regions);
 
-	pr_err("hypervisor memory region: [0x%llx-0x%llx], 0x%llx\n",
-		hv_region.start, hv_region.start + hv_region.size - 1,
-		hv_region.size);
-	pr_err("RT memory region: [0x%llx-0x%llx], 0x%llx\n",
-		rt_region.start, rt_region.start + rt_region.size - 1,
-		rt_region.size);
+	pr_err(
+		"hypervisor memory region: [0x%llx-0x%llx], 0x%llx\n", hv_region.start,
+		hv_region.start + hv_region.size - 1, hv_region.size);
+	pr_err(
+		"RT memory region: [0x%llx-0x%llx], 0x%llx\n", rt_region.start,
+		rt_region.start + rt_region.size - 1, rt_region.size);
 
 	header = (struct jailhouse_header *)hypervisor->data;
 
 	err = -EINVAL;
-	if (memcmp(header->signature, JAILHOUSE_SIGNATURE,
-		   sizeof(header->signature)) != 0) {
+	if (memcmp(
+			header->signature, JAILHOUSE_SIGNATURE,
+			sizeof(header->signature)) != 0)
+	{
 		pr_err("SIGNATURE CHECK FAIL\n");
 		goto error_release_fw;
 	}
@@ -465,7 +499,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		header->core_size + max_cpus * header->percpu_size;
 	config_size = sizeof(*config) + num_mem_regions * sizeof(*mem_regions);
 	if (hv_core_and_percpu_size >= hv_region.size ||
-	    config_size >= hv_region.size - hv_core_and_percpu_size)
+		config_size >= hv_region.size - hv_core_and_percpu_size)
 		goto error_free_mem_regions;
 
 	remap_addr = JAILHOUSE_BASE;
@@ -474,22 +508,25 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	 * redone since the root-cell config might have changed. */
 	jailhouse_firmware_free();
 
-	hypervisor_mem_res = request_mem_region(hv_region.start, hv_region.size,
-						"RVM hypervisor");
-	if (!hypervisor_mem_res) {
+	hypervisor_mem_res =
+		request_mem_region(hv_region.start, hv_region.size, "RVM hypervisor");
+	if (!hypervisor_mem_res)
+	{
 		pr_err("jailhouse: request_mem_region failed for hypervisor "
-		       "memory.\n");
+			   "memory.\n");
 		pr_notice("jailhouse: Did you reserve the memory with "
-			  "\"memmap=\" or \"mem=\"?\n");
+				  "\"memmap=\" or \"mem=\"?\n");
 		goto error_free_mem_regions;
 	}
 
 	/* Map physical memory region reserved for Jailhouse. */
 	hypervisor_mem =
 		jailhouse_ioremap(hv_region.start, remap_addr, hv_region.size);
-	if (!hypervisor_mem) {
-		pr_err("jailhouse: Unable to map RAM reserved for hypervisor at %08lx\n",
-		       (unsigned long)hv_region.start);
+	if (!hypervisor_mem)
+	{
+		pr_err(
+			"jailhouse: Unable to map RAM reserved for hypervisor at %08lx\n",
+			(unsigned long)hv_region.start);
 		goto error_release_memreg;
 	}
 
@@ -498,7 +535,9 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	/* Copy hypervisor's binary image at beginning of the memory region
 	 * and clear the rest to zero. */
 	memcpy(hypervisor_mem, hypervisor->data, hypervisor->size);
-	memset(hypervisor_mem + hypervisor->size, 0, hv_region.size - hypervisor->size);
+	memset(
+		hypervisor_mem + hypervisor->size, 0,
+		hv_region.size - hypervisor->size);
 
 	header = (struct jailhouse_header *)hypervisor_mem;
 	header->max_cpus = max_cpus;
@@ -506,9 +545,10 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 
 	/* Copy system configuration to its target address in hypervisor memory
 	 * region. */
-	config = (struct jailhouse_system *)(hypervisor_mem +
-					     hv_core_and_percpu_size);
-	init_system_config(config, &hv_region, &rt_region, num_mem_regions, mem_regions);
+	config =
+		(struct jailhouse_system *)(hypervisor_mem + hv_core_and_percpu_size);
+	init_system_config(
+		config, &hv_region, &rt_region, num_mem_regions, mem_regions);
 
 	/*
 	 * ARMv8 requires to clean D-cache and invalidate I-cache for memory
@@ -516,7 +556,8 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	 * firmware does its own cache maintenance, so it is an
 	 * extraneous (but harmless) flush.
 	 */
-	flush_icache_range((unsigned long)hypervisor_mem,
+	flush_icache_range(
+		(unsigned long)hypervisor_mem,
 		(unsigned long)(hypervisor_mem + header->core_size));
 
 	error_code = 0;
@@ -524,14 +565,17 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	preempt_disable();
 
 	cpumask_clear(&vm_cpus_mask);
-	for (cpu = 0; cpu < max_cpus; cpu++) {
+	for (cpu = 0; cpu < max_cpus; cpu++)
+	{
 		// if (cpu >= max_cpus - rt_cpus) {
 		// 	cpu_down(cpu);
 		// } else {
 		cpumask_set_cpu(cpu, &vm_cpus_mask);
 		// }
 	}
-	pr_err("Before entering hypervisor: max_cpus=%d, rt_cpus=%d, num_online_cpus=%d\n",
+	pr_err(
+		"Before entering hypervisor: max_cpus=%d, rt_cpus=%d, "
+		"num_online_cpus=%d\n",
 		max_cpus, rt_cpus, num_online_cpus());
 
 	/*
@@ -546,7 +590,8 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 
 	preempt_enable();
 
-	if (error_code) {
+	if (error_code)
+	{
 		err = error_code;
 		goto err_add_rt_cpus;
 	}
@@ -564,8 +609,10 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	return 0;
 
 err_add_rt_cpus:
-	for (cpu = 0; cpu < max_cpus; cpu++) {
-		if (cpu >= max_cpus - rt_cpus) {
+	for (cpu = 0; cpu < max_cpus; cpu++)
+	{
+		if (cpu >= max_cpus - rt_cpus)
+		{
 			cpu_up(cpu);
 		}
 	}
@@ -576,7 +623,8 @@ error_release_memreg:
 	/* jailhouse_firmware_free() could have been called already and
 	 * has released hypervisor_mem_res. */
 	if (hypervisor_mem_res)
-		release_mem_region(hypervisor_mem_res->start, resource_size(hypervisor_mem_res));
+		release_mem_region(
+			hypervisor_mem_res->start, resource_size(hypervisor_mem_res));
 	hypervisor_mem_res = NULL;
 
 error_free_mem_regions:
@@ -601,9 +649,8 @@ static void leave_hypervisor(void *info)
 	/* Touch each hypervisor page we may need during the switch so that
 	 * the active mm definitely contains all mappings. At least x86 does
 	 * not support taking any faults while switching worlds. */
-	for (page = hypervisor_mem;
-	     page < hypervisor_mem + hv_core_and_percpu_size;
-	     page += PAGE_SIZE)
+	for (page = hypervisor_mem; page < hypervisor_mem + hv_core_and_percpu_size;
+		 page += PAGE_SIZE)
 		readl((void __iomem *)page);
 
 	/* either returns 0 or the same error code across all CPUs */
@@ -611,10 +658,11 @@ static void leave_hypervisor(void *info)
 	if (err)
 		error_code = err;
 
-#if defined(CONFIG_X86) && LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0)
+#if defined(CONFIG_X86) && LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
 	/* on Intel, VMXE is now off - update the shadow */
-	if (boot_cpu_has(X86_FEATURE_VMX) && !err) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
+	if (boot_cpu_has(X86_FEATURE_VMX) && !err)
+	{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 5, 0)
 		cr4_clear_bits_irqsoff(X86_CR4_VMXE);
 #else
 		cr4_clear_bits(X86_CR4_VMXE);
@@ -633,7 +681,8 @@ static int jailhouse_cmd_disable(void)
 	if (mutex_lock_interruptible(&jailhouse_lock) != 0)
 		return -EINTR;
 
-	if (!jailhouse_enabled) {
+	if (!jailhouse_enabled)
+	{
 		err = -EINVAL;
 		goto unlock_out;
 	}
@@ -642,7 +691,8 @@ static int jailhouse_cmd_disable(void)
 
 	preempt_disable();
 
-	if (num_online_cpus() != enter_hv_cpus) {
+	if (num_online_cpus() != enter_hv_cpus)
+	{
 		/*
 		 * Not all assigned CPUs are currently online. If we disable
 		 * now, we will lose the offlined ones.
@@ -660,18 +710,22 @@ static int jailhouse_cmd_disable(void)
 	while (atomic_read(&call_done) != num_online_cpus())
 		cpu_relax();
 
-	for (cpu = 0; cpu < max_cpus; cpu++) {
-		if (cpu >= max_cpus - rt_cpus) {
+	for (cpu = 0; cpu < max_cpus; cpu++)
+	{
+		if (cpu >= max_cpus - rt_cpus)
+		{
 			cpu_up(cpu);
 		}
 	}
-	pr_info("Disable hypervisor OK: max_cpus=%d, rt_cpus=%d, num_online_cpus=%d\n",
+	pr_info(
+		"Disable hypervisor OK: max_cpus=%d, rt_cpus=%d, num_online_cpus=%d\n",
 		max_cpus, rt_cpus, num_online_cpus());
 
 	preempt_enable();
 
 	err = error_code;
-	if (err) {
+	if (err)
+	{
 		pr_warn("jailhouse: Failed to disable hypervisor: %d\n", err);
 		goto unlock_out;
 	}
@@ -687,12 +741,13 @@ unlock_out:
 	return err;
 }
 
-static long jailhouse_ioctl(struct file *file, unsigned int ioctl,
-			    unsigned long arg)
+static long
+jailhouse_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 {
 	long err;
 
-	switch (ioctl) {
+	switch (ioctl)
+	{
 	case JAILHOUSE_ENABLE:
 		err = jailhouse_cmd_enable((struct jailhouse_enable_args __user *)arg);
 		break;
@@ -720,8 +775,8 @@ static struct miscdevice jailhouse_misc_dev = {
 	.fops = &jailhouse_fops,
 };
 
-static int jailhouse_shutdown_notify(struct notifier_block *unused1,
-				     unsigned long unused2, void *unused3)
+static int jailhouse_shutdown_notify(
+	struct notifier_block *unused1, unsigned long unused2, void *unused3)
 {
 	int err;
 
@@ -740,17 +795,23 @@ static int __init jailhouse_init(void)
 {
 	int err;
 
-#if defined(CONFIG_KALLSYMS_ALL) // && LINUX_VERSION_CODE < KERNEL_VERSION(5,7,0)
-#define __RESOLVE_EXTERNAL_SYMBOL(symbol)			\
-	symbol##_sym = (void *)generic_kallsyms_lookup_name(#symbol);	\
-	if (!symbol##_sym) {					\
-		pr_err("Failed to resolve symbol %s\n", #symbol);	\
-		return -EINVAL; } \
-	else { \
-		pr_err("Resolved symbol %s: 0x%lx\n", #symbol, (unsigned long)symbol##_sym); }
+#if defined(CONFIG_KALLSYMS_ALL) // && LINUX_VERSION_CODE <
+								 // KERNEL_VERSION(5,7,0)
+#define __RESOLVE_EXTERNAL_SYMBOL(symbol)                                      \
+	symbol##_sym = (void *)generic_kallsyms_lookup_name(#symbol);              \
+	if (!symbol##_sym)                                                         \
+	{                                                                          \
+		pr_err("Failed to resolve symbol %s\n", #symbol);                      \
+		return -EINVAL;                                                        \
+	}                                                                          \
+	else                                                                       \
+	{                                                                          \
+		pr_err(                                                                \
+			"Resolved symbol %s: 0x%lx\n", #symbol,                            \
+			(unsigned long)symbol##_sym);                                      \
+	}
 #else
-#define __RESOLVE_EXTERNAL_SYMBOL(symbol)			\
-	symbol##_sym = &symbol
+#define __RESOLVE_EXTERNAL_SYMBOL(symbol) symbol##_sym = &symbol
 #endif
 #define RESOLVE_EXTERNAL_SYMBOL(symbol...) __RESOLVE_EXTERNAL_SYMBOL(symbol)
 
@@ -765,7 +826,7 @@ static int __init jailhouse_init(void)
 	RESOLVE_EXTERNAL_SYMBOL(__pud_alloc);
 	RESOLVE_EXTERNAL_SYMBOL(__pmd_alloc);
 
-	init_mm_sym = (struct mm_struct *) generic_kallsyms_lookup_name("init_mm");
+	init_mm_sym = (struct mm_struct *)generic_kallsyms_lookup_name("init_mm");
 
 	jailhouse_dev = root_device_register("jailhouse");
 	if (IS_ERR(jailhouse_dev))

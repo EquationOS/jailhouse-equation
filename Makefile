@@ -27,6 +27,6 @@ ssh:
 	ssh -p $(PORT) ubuntu@localhost
 
 scp_jailhouse:
-	scp -P $(PORT) -r ../jailhouse-deagle ubuntu@localhost:~/
+	scp -P $(PORT) -r ../jailhouse-equation ubuntu@localhost:~/
 
 .PHONY: modules clean ssh

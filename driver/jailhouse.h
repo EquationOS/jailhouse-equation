@@ -4,28 +4,31 @@
 #include <linux/ioctl.h>
 #include <linux/types.h>
 
-struct mem_region {
+struct mem_region
+{
 	unsigned long long start;
 	unsigned long long size;
 };
 
-struct jailhouse_enable_args {
+struct jailhouse_enable_args
+{
 	struct mem_region hv_region;
 	struct mem_region rt_region;
 };
 
-#define JAILHOUSE_ENABLE		_IOW(0, 0, struct jailhouse_enable_args)
-#define JAILHOUSE_DISABLE		_IO(0, 1)
+#define JAILHOUSE_ENABLE _IOW(0, 0, struct jailhouse_enable_args)
+#define JAILHOUSE_DISABLE _IO(0, 1)
 
-#define JAILHOUSE_BASE	0xffffff0000000000UL
-#define JAILHOUSE_SIGNATURE	"RVMIMAGE"
+#define JAILHOUSE_BASE 0xffffff0000000000UL
+#define JAILHOUSE_SIGNATURE "RVMIMAGE"
 
 /**
  * Hypervisor description.
  * Located at the beginning of the hypervisor binary image and loaded by
  * the driver (which also initializes some fields).
  */
-struct jailhouse_header {
+struct jailhouse_header
+{
 	/** Signature "RVMIMAGE" used for basic validity check of the
 	 * hypervisor image.
 	 * @note Filled at build time. */
