@@ -51,8 +51,8 @@
 #endif
 
 #ifdef CONFIG_X86
-#define JAILHOUSE_AMD_FW_NAME "rvm-amd.bin"
-#define JAILHOUSE_INTEL_FW_NAME "rvm-intel.bin"
+#define JAILHOUSE_AMD_FW_NAME "evm-amd.bin"
+#define JAILHOUSE_INTEL_FW_NAME "evm-intel.bin"
 #endif
 
 MODULE_DESCRIPTION("Management driver for Jailhouse partitioning hypervisor");
@@ -509,7 +509,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	jailhouse_firmware_free();
 
 	hypervisor_mem_res =
-		request_mem_region(hv_region.start, hv_region.size, "RVM hypervisor");
+		request_mem_region(hv_region.start, hv_region.size, "EVM hypervisor");
 	if (!hypervisor_mem_res)
 	{
 		pr_err("jailhouse: request_mem_region failed for hypervisor "
