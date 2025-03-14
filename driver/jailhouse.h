@@ -13,13 +13,13 @@ struct mem_region
 struct jailhouse_enable_args
 {
 	struct mem_region hv_region;
-	struct mem_region rt_region;
 };
 
 #define JAILHOUSE_ENABLE _IOW(0, 0, struct jailhouse_enable_args)
 #define JAILHOUSE_DISABLE _IO(0, 1)
 
-#define JAILHOUSE_BASE 0xffffff0000000000UL
+#define JAILHOUSE_BASE 0xffff800000000000UL
+// #define JAILHOUSE_BASE 0xffffff0000000000UL
 #define JAILHOUSE_SIGNATURE "EVMIMAGE"
 
 /**

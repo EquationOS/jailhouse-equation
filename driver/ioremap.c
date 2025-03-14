@@ -34,8 +34,14 @@ static int vmap_pte_range(
 	struct page *page;
 	unsigned long size = PAGE_SIZE;
 
+	pr_err("[JAILHOUSE] vmap_pte_range: 0x%lx - 0x%lx\n", addr, end);
+	pr_err("pmd: %p\n", pmd);
+
 	pfn = phys_addr >> PAGE_SHIFT;
 	pte = pte_alloc_kernel_track(pmd, addr, mask);
+
+	pr_err("[JAILHOUSE] vmap_pte_range: pfn 0x%llx\n", pfn);
+	pr_err("pte: %p\n", pte);
 
 	if (!pte)
 		return -ENOMEM;
@@ -104,15 +110,23 @@ static int vmap_pmd_range(
 
 	pmd = pmd_alloc_track(init_mm_sym, pud, addr, mask);
 
+	pr_err("[JAILHOUSE] vmap_pmd_range: 0x%lx - 0x%lx\n", addr, end);
+	pr_err("pmd: %p\n", pmd);
+
 	if (!pmd)
 		return -ENOMEM;
 	do
 	{
 		next = pmd_addr_end(addr, end);
-
+		pr_err("before map pmd: %lx\n", pmd_val(*pmd));
 		if (vmap_try_huge_pmd(pmd, addr, next, phys_addr, prot, max_page_shift))
 		{
 			*mask |= PGTBL_PMD_MODIFIED;
+
+			pr_err(
+				"[JAILHOUSE] address: [0x%lx-0x%lx] mapped to 0x%llx as huge\n",
+				addr, next, phys_addr);
+			pr_err("after map pmd: %lx\n", pmd_val(*pmd));
 			continue;
 		}
 
@@ -155,6 +169,9 @@ static int vmap_pud_range(
 	pud_t *pud;
 	unsigned long next;
 	pud = pud_alloc_track(init_mm_sym, p4d, addr, mask);
+
+	pr_err("[JAILHOUSE] vmap_pud_range: 0x%lx - 0x%lx\n", addr, end);
+	pr_err("pud: %p\n", pud);
 
 	if (!pud)
 		return -ENOMEM;
@@ -209,6 +226,9 @@ static int vmap_p4d_range(
 
 	p4d = p4d_alloc_track(init_mm_sym, pgd, addr, mask);
 
+	pr_err("[JAILHOUSE] vmap_p4d_range: 0x%lx - 0x%lx\n", addr, end);
+	pr_err("p4d: %p\n", p4d);
+
 	if (!p4d)
 		return -ENOMEM;
 	do
@@ -242,8 +262,12 @@ static int vmap_range_noflush(
 	BUG_ON(addr >= end);
 
 	start = addr;
-	// pgd = pgd_offset_k(addr);
 	pgd = pgd_offset(init_mm_sym, addr);
+
+	pr_err("[JAILHOUSE] vmap_range_noflush: 0x%lx - 0x%lx\n", addr, end);
+	pr_err(
+		"pgd at %lx: %p 0x%lx\n", (unsigned long) pgd, pgd,
+		(unsigned long)pgd_val(*pgd));
 
 	do
 	{

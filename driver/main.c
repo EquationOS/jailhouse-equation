@@ -75,7 +75,7 @@ static cpumask_t vm_cpus_mask;
 static atomic_t call_done;
 static int error_code;
 static struct resource *hypervisor_mem_res;
-static struct mem_region hv_region, rt_region;
+static struct mem_region hv_region;
 
 static typeof(ioremap_page_range) *ioremap_page_range_sym;
 static typeof(__get_vm_area_caller) *__get_vm_area_caller_sym;
@@ -122,6 +122,10 @@ jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
 	pr_err(
 		"[JAILHOUSE] jailhouse_ioremap: 0x%llx - 0x%llx\n", phys, phys + size);
 
+	pr_err(
+		"[JAILHOUSE] jailhouse_ioremap: vma 0x%lx - 0x%lx\n",
+		(unsigned long)vma->addr, (unsigned long)vma->addr + size);
+
 	if (jailhouse_ioremap_page_range(
 			(unsigned long)vma->addr, (unsigned long)vma->addr + size, phys,
 			PAGE_KERNEL_EXEC))
@@ -132,21 +136,6 @@ jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
 
 	return vma->addr;
 }
-
-int get_rt_memory_region(struct mem_region *region)
-{
-	if (!rt_region.start || !rt_region.size)
-	{
-		return -EBUSY;
-	}
-	else
-	{
-		*region = rt_region;
-		return 0;
-	}
-}
-
-EXPORT_SYMBOL(get_rt_memory_region);
 
 /*
  * Called for each cpu by the JAILHOUSE_ENABLE ioctl.
@@ -356,7 +345,7 @@ static void dump_mem_regions(struct jailhouse_memory *regions, int n)
 	int i;
 	for (i = 0; i < n; i++)
 	{
-		pr_info(
+		pr_err(
 			"region[%d]: [0x%llx - 0x%llx], size=0x%llx, flag=0x%llx\n", i,
 			regions[i].phys_start, regions[i].phys_start + regions[i].size - 1,
 			regions[i].size, regions[i].flags);
@@ -365,8 +354,7 @@ static void dump_mem_regions(struct jailhouse_memory *regions, int n)
 
 static void init_system_config(
 	struct jailhouse_system *config, struct mem_region *hv_region,
-	struct mem_region *rt_region, int num_mem_regions,
-	struct jailhouse_memory *mem_regions)
+	int num_mem_regions, struct jailhouse_memory *mem_regions)
 {
 	memset(config, 0, sizeof(*config));
 
@@ -376,8 +364,6 @@ static void init_system_config(
 	config->revision = JAILHOUSE_CONFIG_REVISION;
 	config->hypervisor_memory.phys_start = hv_region->start;
 	config->hypervisor_memory.size = hv_region->size;
-	config->rtos_memory.phys_start = rt_region->start;
-	config->rtos_memory.size = rt_region->size;
 	memcpy(
 		config->root_cell.signature, JAILHOUSE_CELL_DESC_SIGNATURE,
 		sizeof(config->root_cell.signature));
@@ -418,14 +404,9 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
 		return -EFAULT;
 	}
-	if (copy_from_user(&rt_region, &arg->rt_region, sizeof(struct mem_region)))
-	{
-		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
-		return -EFAULT;
-	}
 	if (!hv_region.size)
 	{
-		hv_region.size = 256 << 20; // 256M
+		hv_region.size = 256 << 20; // Default to 256M.
 	}
 
 	if (mutex_lock_interruptible(&jailhouse_lock) != 0)
@@ -478,9 +459,6 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	pr_err(
 		"hypervisor memory region: [0x%llx-0x%llx], 0x%llx\n", hv_region.start,
 		hv_region.start + hv_region.size - 1, hv_region.size);
-	pr_err(
-		"RT memory region: [0x%llx-0x%llx], 0x%llx\n", rt_region.start,
-		rt_region.start + rt_region.size - 1, rt_region.size);
 
 	header = (struct jailhouse_header *)hypervisor->data;
 
@@ -547,8 +525,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	 * region. */
 	config =
 		(struct jailhouse_system *)(hypervisor_mem + hv_core_and_percpu_size);
-	init_system_config(
-		config, &hv_region, &rt_region, num_mem_regions, mem_regions);
+	init_system_config(config, &hv_region, num_mem_regions, mem_regions);
 
 	/*
 	 * ARMv8 requires to clean D-cache and invalidate I-cache for memory
@@ -577,6 +554,11 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		"Before entering hypervisor: max_cpus=%d, rt_cpus=%d, "
 		"num_online_cpus=%d\n",
 		max_cpus, rt_cpus, num_online_cpus());
+
+	pr_err(
+		"hypervisor_mem: 0x%lx, hypervisor entry: 0x%lx\n",
+		(unsigned long)hypervisor_mem,
+		(unsigned long)header->entry + (unsigned long)hypervisor_mem);
 
 	/*
 	 * Cannot use wait=true here because all CPUs have to enter the
