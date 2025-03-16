@@ -134,6 +134,8 @@ jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
 		return NULL;
 	}
 
+	check_ioremapped_page((unsigned long)vma->addr);
+
 	return vma->addr;
 }
 
@@ -500,7 +502,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	/* Map physical memory region reserved for Jailhouse. */
 	hypervisor_mem =
 		jailhouse_ioremap(hv_region.start, remap_addr, hv_region.size);
-	if (hypervisor_mem)
+	if (!hypervisor_mem)
 	{
 		pr_err(
 			"jailhouse: Unable to map RAM reserved for hypervisor at %08lx\n",

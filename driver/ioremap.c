@@ -110,41 +110,30 @@ static int vmap_pmd_range(
 
 	pmd = pmd_alloc_track(init_mm_sym, pud, addr, mask);
 
-	pr_err("[JAILHOUSE] vmap_pmd_range: 0x%lx - 0x%lx\n", addr, end);
-	pr_err("pmd: %p\n", pmd);
-
-	unsigned long index = pmd_index(addr);
-	pr_err("pmd[%ld] %lx\n", index, pmd[index].pmd);
+	pr_err("		[JAILHOUSE] vmap_pmd_range: 0x%lx - 0x%lx\n", addr, end);
+	pr_err("		pmd: %p\n", pmd);
 
 	if (!pmd)
 		return -ENOMEM;
 	do
 	{
 		next = pmd_addr_end(addr, end);
-		pr_err("before map pmd_val: %lx ", pmd_val(*pmd));
-
-		unsigned long index = pmd_index(addr);
-		pr_err("pmd[%ld] %lx\n", index, pmd[index].pmd);
-
+		// pr_err("		before map pmd_val: %lx ", pmd_val(*pmd));
 		if (vmap_try_huge_pmd(pmd, addr, next, phys_addr, prot, max_page_shift))
 		{
 			*mask |= PGTBL_PMD_MODIFIED;
 
-			pr_err(
-				"[JAILHOUSE] address: [0x%lx-0x%lx] mapped to 0x%llx as huge\n",
-				addr, next, phys_addr);
-			pr_err("after map pmd_val: %lx ", pmd_val(*pmd));
-			index = pmd_index(addr);
-			pr_err("pmd[%ld] %lx\n", index, pmd[index].pmd);
+			// pr_err(
+			// 	"		[JAILHOUSE] address: [0x%lx-0x%lx] mapped to 0x%llx as "
+			// 	"huge\n",
+			// 	addr, next, phys_addr);
+			// pr_err("		after map pmd_val: %lx ", pmd_val(*pmd));
 			continue;
 		}
 
 		if (vmap_pte_range(
 				pmd, addr, next, phys_addr, prot, max_page_shift, mask))
 			return -ENOMEM;
-
-		index = pmd_index(addr);
-		pr_err("after map pmd[%ld] %lx\n", index, pmd[index].pmd);
 	} while (pmd++, phys_addr += (next - addr), addr = next, addr != end);
 	return 0;
 }
@@ -182,8 +171,8 @@ static int vmap_pud_range(
 	unsigned long next;
 	pud = pud_alloc_track(init_mm_sym, p4d, addr, mask);
 
-	pr_err("[JAILHOUSE] vmap_pud_range: 0x%lx - 0x%lx\n", addr, end);
-	pr_err("pud: %p\n", pud);
+	pr_err("	[JAILHOUSE] vmap_pud_range: 0x%lx - 0x%lx\n", addr, end);
+	pr_err("	pud: %p\n", pud);
 
 	if (!pud)
 		return -ENOMEM;
@@ -191,8 +180,8 @@ static int vmap_pud_range(
 	{
 		next = pud_addr_end(addr, end);
 
-		unsigned long index = pud_index(addr);
-		pr_err("before map pud[%ld] %lx\n", index, pud[index].pud);
+		unsigned long index = pmd_index(addr);
+		pr_err("	before map pud[%ld] %lx\n", index, pud[index].pud);
 
 		if (vmap_try_huge_pud(pud, addr, next, phys_addr, prot, max_page_shift))
 		{
@@ -205,7 +194,7 @@ static int vmap_pud_range(
 			return -ENOMEM;
 
 		index = pud_index(addr);
-		pr_err("after map pud[%ld] %lx\n", index, pud[index].pud);
+		pr_err("	after map pud[%ld] %lx\n", index, pud[index].pud);
 	} while (pud++, phys_addr += (next - addr), addr = next, addr != end);
 	return 0;
 }
@@ -247,7 +236,7 @@ static int vmap_p4d_range(
 	pr_err("[JAILHOUSE] vmap_p4d_range: 0x%lx - 0x%lx\n", addr, end);
 	pr_err("p4d: %p\n", p4d);
 
-	unsigned long index = p4d_index(addr);
+	unsigned long index = pud_index(addr);
 	pr_err("p4d[%ld] %lx\n", index, p4d[index].p4d);
 
 	if (!p4d)
@@ -286,40 +275,21 @@ static int vmap_range_noflush(
 	unsigned long next;
 	int err;
 	pgtbl_mod_mask mask = 0;
+	unsigned long index = 0;
 
 	might_sleep();
 	BUG_ON(addr >= end);
 
-	pgd_t *base = __va(read_cr3_pa());
-	pgd_t *cr3_pgd = &base[pgd_index(addr)];
+	pgd_t *cr3_base = __va(read_cr3_pa());
 
-	int count = 512;
+	index = pgd_index(addr);
+
+	// pgd_t *cr3_pgd = &cr3_base[index];
+	pgd = &cr3_base[index];
 
 	// pr_err("pgd: \n");
 
-	start = addr;
-	pgd = pgd_offset(init_mm_sym, addr);
-	pgd_new = pgd;
-	unsigned long index = 0;
-
-	pr_err(
-		"%ld: cr3_pgd: %lx , pdg: %lx\n", index, cr3_pgd[index].pgd,
-		pgd_new[index].pgd);
-
-	index = pgd_index(addr);
-	// pr_err("cr3_pgd: \n");
-	pr_err(
-		"%ld: cr3_pgd: %lx , pdg: %lx\n", index, cr3_pgd[index].pgd,
-		pgd_new[index].pgd);
-
-	// for(int i = 0; i < count; i++) {
-	// 	pr_err("%lx ", );
-	// }
-
 	pr_err("[JAILHOUSE] vmap_range_noflush: 0x%lx - 0x%lx\n", addr, end);
-	pr_err(
-		"pgd at %lx: 0x%lx value 0x%lx\n", (unsigned long)pgd, pgd->pgd,
-		(unsigned long)pgd_val(*pgd));
 
 	pr_err("pgd pa %lx\n", __pa((unsigned long)pgd));
 
@@ -329,6 +299,17 @@ static int vmap_range_noflush(
 
 	pr_err("cr3 0x%lx\n", __native_read_cr3());
 
+	// start = addr;
+	// pgd = pgd_offset(init_mm_sym, addr);
+	pgd_new = pgd;
+
+	pr_err(
+		"pgd at %lx: 0x%lx value 0x%lx\n", (unsigned long)pgd, pgd->pgd,
+		(unsigned long)pgd_val(*pgd));
+
+	// pr_err(
+	// 	"[BEFORE] %ld: cr3_pgd: %lx , init_mm_pgd: %lx\n", index, cr3_pgd->pgd,
+	// 	pgd_new->pgd);
 	do
 	{
 		next = pgd_addr_end(addr, end);
@@ -339,13 +320,9 @@ static int vmap_range_noflush(
 	} while (pgd++, phys_addr += (next - addr), addr = next, addr != end);
 
 	pr_err("map finished: \n");
-	for (int i = 0; i < count; i++)
-	{
-		if (cr3_pgd[i].pgd != pgd_new[i].pgd)
-			pr_err(
-				"%d: cr3_pgd: %lx , pdg: %lx\n", i, cr3_pgd[i].pgd,
-				pgd_new[i].pgd);
-	}
+	// pr_err(
+	// 	"[AFTER] %ld: cr3_pgd: %lx , init_mm_pgd: %lx\n", index, cr3_pgd->pgd,
+	// 	pgd_new->pgd);
 
 	if (mask & ARCH_PAGE_TABLE_SYNC_MASK)
 		arch_sync_kernel_mappings(start, end);
@@ -365,4 +342,55 @@ int jailhouse_ioremap_page_range(
 		err = kmsan_ioremap_page_range(
 			addr, end, phys_addr, prot, ioremap_max_page_shift);
 	return err;
+}
+
+void check_from_pgd(pgd_t *pgd, unsigned long addr)
+{
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	pr_err("pgd: 0x%lx\n", pgd_val(*pgd));
+	if (pgd_none(*pgd))
+	{
+		pr_err("pgd is none\n");
+		return;
+	}
+	p4d = p4d_offset(pgd, addr);
+	pr_err("p4d: 0x%lx\n", p4d_val(*p4d));
+	if (p4d_none(*p4d))
+	{
+		pr_err("p4d is none\n");
+		return;
+	}
+	pud = pud_offset(p4d, addr);
+	pr_err("pud: 0x%lx\n", pud_val(*pud));
+	if (pud_none(*pud))
+	{
+		pr_err("pud is none\n");
+		return;
+	}
+	pmd = pmd_offset(pud, addr);
+	pr_err("pmd: 0x%lx\n", pmd_val(*pmd));
+	if (pmd_none(*pmd))
+	{
+		pr_err("pmd is none\n");
+		return;
+	}
+}
+
+void check_ioremapped_page(unsigned long addr)
+{
+	pgd_t *pgd;
+	unsigned long index;
+
+	pr_err("\n\ncheck_ioremapped_page in init_mm: 0x%lx\n", addr);
+	pgd = pgd_offset(init_mm_sym, addr);
+	check_from_pgd(pgd, addr);
+
+	pr_err("\n\ncheck_ioremapped_page in cr3: 0x%lx\n", addr);
+	pgd_t *cr3_base = __va(read_cr3_pa());
+	index = pgd_index(addr);
+	pgd = &cr3_base[index];
+	check_from_pgd(pgd, addr);
 }
