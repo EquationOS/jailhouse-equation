@@ -9,7 +9,7 @@
  * Incremented on any layout or semantic change of system or cell config.
  * Also update formats and HEADER_REVISION in pyjailhouse/config_parser.py.
  */
-#define JAILHOUSE_CONFIG_REVISION 13
+#define JAILHOUSE_CONFIG_REVISION 314
 
 #define JAILHOUSE_CELL_NAME_MAXLEN 31
 
@@ -60,7 +60,6 @@ struct jailhouse_system
 
 	/** Jailhouse's location in memory */
 	struct jailhouse_memory hypervisor_memory;
-	struct jailhouse_memory rtos_memory;
 	struct jailhouse_cell_desc root_cell;
 } __attribute__((packed));
 

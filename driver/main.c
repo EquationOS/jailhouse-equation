@@ -75,7 +75,7 @@ static cpumask_t vm_cpus_mask;
 static atomic_t call_done;
 static int error_code;
 static struct resource *hypervisor_mem_res;
-static struct mem_region hv_region, rt_region;
+static struct mem_region hv_region;
 
 static typeof(ioremap_page_range) *ioremap_page_range_sym;
 static typeof(__get_vm_area_caller) *__get_vm_area_caller_sym;
@@ -103,7 +103,6 @@ static void init_hypercall(void) {}
 
 void *
 jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size);
-int get_rt_memory_region(struct mem_region *region);
 
 void *
 jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
@@ -132,21 +131,6 @@ jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
 
 	return vma->addr;
 }
-
-int get_rt_memory_region(struct mem_region *region)
-{
-	if (!rt_region.start || !rt_region.size)
-	{
-		return -EBUSY;
-	}
-	else
-	{
-		*region = rt_region;
-		return 0;
-	}
-}
-
-EXPORT_SYMBOL(get_rt_memory_region);
 
 /*
  * Called for each cpu by the JAILHOUSE_ENABLE ioctl.
@@ -365,8 +349,7 @@ static void dump_mem_regions(struct jailhouse_memory *regions, int n)
 
 static void init_system_config(
 	struct jailhouse_system *config, struct mem_region *hv_region,
-	struct mem_region *rt_region, int num_mem_regions,
-	struct jailhouse_memory *mem_regions)
+	int num_mem_regions, struct jailhouse_memory *mem_regions)
 {
 	memset(config, 0, sizeof(*config));
 
@@ -376,8 +359,6 @@ static void init_system_config(
 	config->revision = JAILHOUSE_CONFIG_REVISION;
 	config->hypervisor_memory.phys_start = hv_region->start;
 	config->hypervisor_memory.size = hv_region->size;
-	config->rtos_memory.phys_start = rt_region->start;
-	config->rtos_memory.size = rt_region->size;
 	memcpy(
 		config->root_cell.signature, JAILHOUSE_CELL_DESC_SIGNATURE,
 		sizeof(config->root_cell.signature));
@@ -414,11 +395,6 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	}
 
 	if (copy_from_user(&hv_region, &arg->hv_region, sizeof(struct mem_region)))
-	{
-		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
-		return -EFAULT;
-	}
-	if (copy_from_user(&rt_region, &arg->rt_region, sizeof(struct mem_region)))
 	{
 		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
 		return -EFAULT;
@@ -478,9 +454,6 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	pr_err(
 		"hypervisor memory region: [0x%llx-0x%llx], 0x%llx\n", hv_region.start,
 		hv_region.start + hv_region.size - 1, hv_region.size);
-	pr_err(
-		"RT memory region: [0x%llx-0x%llx], 0x%llx\n", rt_region.start,
-		rt_region.start + rt_region.size - 1, rt_region.size);
 
 	header = (struct jailhouse_header *)hypervisor->data;
 
@@ -494,7 +467,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	}
 
 	max_cpus = num_possible_cpus();
-	rt_cpus = 1;
+	rt_cpus = 0;
 	hv_core_and_percpu_size =
 		header->core_size + max_cpus * header->percpu_size;
 	config_size = sizeof(*config) + num_mem_regions * sizeof(*mem_regions);
@@ -548,7 +521,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	config =
 		(struct jailhouse_system *)(hypervisor_mem + hv_core_and_percpu_size);
 	init_system_config(
-		config, &hv_region, &rt_region, num_mem_regions, mem_regions);
+		config, &hv_region, num_mem_regions, mem_regions);
 
 	/*
 	 * ARMv8 requires to clean D-cache and invalidate I-cache for memory
