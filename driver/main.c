@@ -79,6 +79,14 @@ static struct mem_region hv_region;
 
 static typeof(ioremap_page_range) *ioremap_page_range_sym;
 static typeof(__get_vm_area_caller) *__get_vm_area_caller_sym;
+// Functions to implement `cpu_down`.
+static typeof(cpu_maps_update_begin) *cpu_maps_update_begin_sym;
+static typeof(cpu_maps_update_done) *cpu_maps_update_done_sym;
+// static typeof(cpu_down_maps_locked_type) *cpu_down_maps_locked_sym;
+// static typeof(cpu_up_type) *cpu_up_sym;
+static int (*cpu_down_maps_locked_sym)(unsigned int, enum cpuhp_state);
+static int (*cpu_up_sym)(unsigned int, enum cpuhp_state);
+static int (*cpu_device_down_sym)(struct device *);
 
 static char *hv_size = "";
 module_param(hv_size, charp, S_IRUGO);
@@ -93,6 +101,11 @@ static void init_hypercall(void)
 }
 #else /* !CONFIG_X86 */
 static void init_hypercall(void) {}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 7, 0)
+#define add_cpu(cpu) cpu_up(cpu)
+#define remove_cpu(cpu) cpu_down(cpu)
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
@@ -340,7 +353,7 @@ static void dump_mem_regions(struct jailhouse_memory *regions, int n)
 	int i;
 	for (i = 0; i < n; i++)
 	{
-		pr_info(
+		pr_err(
 			"region[%d]: [0x%llx - 0x%llx], size=0x%llx, flag=0x%llx\n", i,
 			regions[i].phys_start, regions[i].phys_start + regions[i].size - 1,
 			regions[i].size, regions[i].flags);
@@ -467,7 +480,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	}
 
 	max_cpus = num_possible_cpus();
-	rt_cpus = 0;
+	rt_cpus = 1;
 	hv_core_and_percpu_size =
 		header->core_size + max_cpus * header->percpu_size;
 	config_size = sizeof(*config) + num_mem_regions * sizeof(*mem_regions);
@@ -520,8 +533,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	 * region. */
 	config =
 		(struct jailhouse_system *)(hypervisor_mem + hv_core_and_percpu_size);
-	init_system_config(
-		config, &hv_region, num_mem_regions, mem_regions);
+	init_system_config(config, &hv_region, num_mem_regions, mem_regions);
 
 	/*
 	 * ARMv8 requires to clean D-cache and invalidate I-cache for memory
@@ -540,12 +552,30 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	cpumask_clear(&vm_cpus_mask);
 	for (cpu = 0; cpu < max_cpus; cpu++)
 	{
-		// if (cpu >= max_cpus - rt_cpus) {
-		// 	cpu_down(cpu);
-		// } else {
-		cpumask_set_cpu(cpu, &vm_cpus_mask);
-		// }
+		if (cpu >= max_cpus - rt_cpus)
+		{
+			if (cpu_online(cpu))
+			{
+				pr_err("Shutting down CPU: %d\n", cpu);
+				remove_cpu(cpu);
+			}
+			else
+			{
+				pr_err("CPU: %d is offline!!!\n", cpu);
+			}
+		}
+		else
+		{
+			cpumask_set_cpu(cpu, &vm_cpus_mask);
+		}
 	}
+
+	for (cpu = 0; cpu < max_cpus; cpu++)
+	{
+		bool online = cpu_online(cpu);
+		pr_err("CPU: %d is %s\n", cpu, online ? "online" : "offline");
+	}
+
 	pr_err(
 		"Before entering hypervisor: max_cpus=%d, rt_cpus=%d, "
 		"num_online_cpus=%d\n",
@@ -586,7 +616,7 @@ err_add_rt_cpus:
 	{
 		if (cpu >= max_cpus - rt_cpus)
 		{
-			cpu_up(cpu);
+			add_cpu(cpu);
 		}
 	}
 
@@ -687,7 +717,7 @@ static int jailhouse_cmd_disable(void)
 	{
 		if (cpu >= max_cpus - rt_cpus)
 		{
-			cpu_up(cpu);
+			add_cpu(cpu);
 		}
 	}
 	pr_info(
@@ -798,6 +828,12 @@ static int __init jailhouse_init(void)
 	RESOLVE_EXTERNAL_SYMBOL(__p4d_alloc);
 	RESOLVE_EXTERNAL_SYMBOL(__pud_alloc);
 	RESOLVE_EXTERNAL_SYMBOL(__pmd_alloc);
+
+	RESOLVE_EXTERNAL_SYMBOL(cpu_maps_update_begin);
+	RESOLVE_EXTERNAL_SYMBOL(cpu_maps_update_done);
+	RESOLVE_EXTERNAL_SYMBOL(cpu_down_maps_locked);
+	RESOLVE_EXTERNAL_SYMBOL(cpu_up);
+	RESOLVE_EXTERNAL_SYMBOL(cpu_device_down);
 
 	init_mm_sym = (struct mm_struct *)generic_kallsyms_lookup_name("init_mm");
 

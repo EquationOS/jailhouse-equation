@@ -4,11 +4,6 @@
 unsigned long get_kallsyms_func(void);
 unsigned long generic_kallsyms_lookup_name(const char *name);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0)
-#define cpu_down(cpu) remove_cpu(cpu)
-#define cpu_up(cpu) add_cpu(cpu)
-#endif
-
 #include <linux/kallsyms.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0) ||                           \
