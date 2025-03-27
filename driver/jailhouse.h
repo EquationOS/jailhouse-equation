@@ -13,6 +13,7 @@ struct mem_region
 struct jailhouse_enable_args
 {
 	struct mem_region hv_region;
+	unsigned int rt_cpus;
 };
 
 #define JAILHOUSE_ENABLE _IOW(0, 0, struct jailhouse_enable_args)

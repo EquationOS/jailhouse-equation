@@ -32,12 +32,15 @@
 #define HV_PHYS_START 0x40000000
 #define HV_MEM_SIZE (256 << 20) // 128M
 
+#define RT_CPUS 2
+
 static const struct jailhouse_enable_args enable_args = {
 	.hv_region =
 		{
 			.start = HV_PHYS_START,
 			.size = HV_MEM_SIZE,
 		},
+	.rt_cpus = RT_CPUS,
 };
 
 static void __attribute__((noreturn)) help(char *prog, int exit_status)

@@ -417,6 +417,19 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		hv_region.size = 256 << 20; // 256M
 	}
 
+	if (copy_from_user(&rt_cpus, &arg->rt_cpus, sizeof(unsigned int)))
+	{
+		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
+		return -EFAULT;
+	}
+	if (rt_cpus == 0)
+	{
+		pr_err(
+			"jailhouse_cmd_enable: invalid rt_cpus: %d, default to 0!!!\n",
+			rt_cpus);
+		rt_cpus = 0;
+	}
+
 	if (mutex_lock_interruptible(&jailhouse_lock) != 0)
 		return -EINTR;
 
@@ -480,7 +493,6 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	}
 
 	max_cpus = num_possible_cpus();
-	rt_cpus = 1;
 	hv_core_and_percpu_size =
 		header->core_size + max_cpus * header->percpu_size;
 	config_size = sizeof(*config) + num_mem_regions * sizeof(*mem_regions);
@@ -547,7 +559,15 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 
 	error_code = 0;
 
-	preempt_disable();
+	/*
+	 * We have to remove this `preempt_disable` and `preempt_enable` pair,
+	 * because it will cause a kernel BUG
+	 * "BUG: scheduling while atomic: jailhouse/1338/0x00000002"
+	 * when calling `remove_cpu`.
+	 *
+	 * Which will lead to a "invalid opcode" exception in `release_firmware`.
+	 */
+	// preempt_disable();
 
 	cpumask_clear(&vm_cpus_mask);
 	for (cpu = 0; cpu < max_cpus; cpu++)
@@ -558,6 +578,10 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 			{
 				pr_err("Shutting down CPU: %d\n", cpu);
 				remove_cpu(cpu);
+			}
+			else if (!cpu_is_hotpluggable(cpu))
+			{
+				pr_err("CPU: %d is not hotpluggable!!!\n", cpu);
 			}
 			else
 			{
@@ -591,7 +615,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 	while (atomic_read(&call_done) != num_online_cpus())
 		cpu_relax();
 
-	preempt_enable();
+	// preempt_enable();
 
 	if (error_code)
 	{
