@@ -131,7 +131,7 @@ jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
 		return NULL;
 	vma->phys_addr = phys;
 
-	pr_err(
+	pr_info(
 		"[JAILHOUSE] jailhouse_ioremap: 0x%llx - 0x%llx\n", phys, phys + size);
 
 	if (jailhouse_ioremap_page_range(
@@ -422,12 +422,16 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		pr_err("jailhouse_cmd_enable: invalid arg: 0x%p\n", arg);
 		return -EFAULT;
 	}
-	if (rt_cpus == 0)
+
+	max_cpus = num_possible_cpus();
+
+	if (rt_cpus >= max_cpus)
 	{
 		pr_err(
-			"jailhouse_cmd_enable: invalid rt_cpus: %d, default to 0!!!\n",
-			rt_cpus);
-		rt_cpus = 0;
+			"jailhouse_cmd_enable: invalid rt_cpus: %d, max_cpus: %d\n"
+			"You can not set rt_cpus equal or larger than max_cpus\n",
+			rt_cpus, max_cpus);
+		return -EINVAL;
 	}
 
 	if (mutex_lock_interruptible(&jailhouse_lock) != 0)
@@ -492,7 +496,6 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		goto error_release_fw;
 	}
 
-	max_cpus = num_possible_cpus();
 	hv_core_and_percpu_size =
 		header->core_size + max_cpus * header->percpu_size;
 	config_size = sizeof(*config) + num_mem_regions * sizeof(*mem_regions);
@@ -510,10 +513,12 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		request_mem_region(hv_region.start, hv_region.size, "EVM hypervisor");
 	if (!hypervisor_mem_res)
 	{
-		pr_err("jailhouse: request_mem_region failed for hypervisor "
-			   "memory.\n");
-		pr_notice("jailhouse: Did you reserve the memory with "
-				  "\"memmap=\" or \"mem=\"?\n");
+		pr_err(
+			"jailhouse: request_mem_region failed for hypervisor "
+			"memory.\n");
+		pr_notice(
+			"jailhouse: Did you reserve the memory with "
+			"\"memmap=\" or \"mem=\"?\n");
 		goto error_free_mem_regions;
 	}
 
@@ -670,15 +675,19 @@ error_unlock:
 
 static void leave_hypervisor(void *info)
 {
-	void *page;
+	// void *page;
 	int err;
 
-	/* Touch each hypervisor page we may need during the switch so that
-	 * the active mm definitely contains all mappings. At least x86 does
-	 * not support taking any faults while switching worlds. */
-	for (page = hypervisor_mem; page < hypervisor_mem + hv_core_and_percpu_size;
-		 page += PAGE_SIZE)
-		readl((void __iomem *)page);
+	unsigned int cpu = smp_processor_id();
+
+	pr_err("CPU: %d is leaving hypervisor\n", cpu);
+
+	// /* Touch each hypervisor page we may need during the switch so that
+	//  * the active mm definitely contains all mappings. At least x86 does
+	//  * not support taking any faults while switching worlds. */
+	// for (page = hypervisor_mem; page < hypervisor_mem +
+	// hv_core_and_percpu_size; 	 page += PAGE_SIZE) 	readl((void __iomem
+	// *)page);
 
 	/* either returns 0 or the same error code across all CPUs */
 	err = jailhouse_call(JAILHOUSE_HC_DISABLE);
@@ -716,7 +725,7 @@ static int jailhouse_cmd_disable(void)
 
 	error_code = 0;
 
-	preempt_disable();
+	// preempt_disable();
 
 	if (num_online_cpus() != enter_hv_cpus)
 	{
@@ -725,7 +734,7 @@ static int jailhouse_cmd_disable(void)
 		 * now, we will lose the offlined ones.
 		 */
 
-		preempt_enable();
+		// preempt_enable();
 
 		err = -EBUSY;
 		goto unlock_out;
@@ -741,6 +750,7 @@ static int jailhouse_cmd_disable(void)
 	{
 		if (cpu >= max_cpus - rt_cpus)
 		{
+			pr_err("Bringing CPU: %d back online\n", cpu);
 			add_cpu(cpu);
 		}
 	}
@@ -748,7 +758,7 @@ static int jailhouse_cmd_disable(void)
 		"Disable hypervisor OK: max_cpus=%d, rt_cpus=%d, num_online_cpus=%d\n",
 		max_cpus, rt_cpus, num_online_cpus());
 
-	preempt_enable();
+	// preempt_enable();
 
 	err = error_code;
 	if (err)
@@ -833,7 +843,7 @@ static int __init jailhouse_init(void)
 	}                                                                          \
 	else                                                                       \
 	{                                                                          \
-		pr_err(                                                                \
+		pr_info(                                                               \
 			"Resolved symbol %s: 0x%lx\n", #symbol,                            \
 			(unsigned long)symbol##_sym);                                      \
 	}

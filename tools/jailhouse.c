@@ -32,9 +32,9 @@
 #define HV_PHYS_START 0x40000000
 #define HV_MEM_SIZE (256 << 20) // 128M
 
-#define RT_CPUS 2
+#define RT_CPUS 1 // Set to 1 by default
 
-static const struct jailhouse_enable_args enable_args = {
+static const struct jailhouse_enable_args default_enable_args = {
 	.hv_region =
 		{
 			.start = HV_PHYS_START,
@@ -48,7 +48,7 @@ static void __attribute__((noreturn)) help(char *prog, int exit_status)
 	printf(
 		"Usage: %s { COMMAND | --help | --version }\n"
 		"\nAvailable commands:\n"
-		"   enable\n"
+		"   enable INSTANCE_CPU_NUM\n"
 		"   disable\n",
 		basename(prog));
 	exit(exit_status);
@@ -77,6 +77,13 @@ int main(int argc, char *argv[])
 
 	if (strcmp(argv[1], "enable") == 0)
 	{
+		if (argc != 3)
+			help(argv[0], 1);
+
+		struct jailhouse_enable_args enable_args = default_enable_args;
+
+		enable_args.rt_cpus = strtol(argv[2], NULL, 0);
+
 		fd = open_dev();
 		err = ioctl(fd, JAILHOUSE_ENABLE, &enable_args);
 		if (err)
