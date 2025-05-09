@@ -254,6 +254,10 @@ static bool get_mem_region_one(
 	{
 		if (strcmp(name, "Reserved"))
 		{
+
+			pr_err(
+				"HV reserved region [%llx-%llx] inside region %s [%llx-%llx]\n",
+				res_start, res_end, name, s, e);
 			return false;
 		}
 		if (s < res_start)
@@ -272,6 +276,11 @@ static bool get_mem_region_one(
 	}
 	else if (!(e <= res_start || res_end <= s))
 	{
+
+		pr_err(
+			"WARN Region %s [%llx-%llx] overlapped with HV reserved region "
+			"[%llx-%llx]\n",
+			name, s, e, res_start, res_end);
 		pr_err("overlapped with reserved region");
 		return false;
 	}
@@ -333,7 +342,7 @@ get_mem_regions(struct jailhouse_memory *regions, struct mem_region *reserved)
 		struct mem_region region;
 		region.start = child->start;
 		region.size = child->end - child->start + 1;
-		pr_debug(
+		pr_err(
 			"found region: %s [0x%llx..0x%llx]\n", child->name, region.start,
 			region.start + region.size - 1);
 		if (!get_mem_region_one(&region, child->name, reserved, regions, &num))
@@ -472,6 +481,11 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		err = -ENOMEM;
 		goto error_release_fw;
 	}
+
+	pr_err(
+		"Check HV reserved region [0x%llx-0x%llx], 0x%llx", hv_region.start,
+		hv_region.start + hv_region.size - 1, hv_region.size);
+
 	num_mem_regions = get_mem_regions(mem_regions, &hv_region);
 	if (num_mem_regions == -1)
 	{
@@ -636,7 +650,7 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 
 	mutex_unlock(&jailhouse_lock);
 
-	pr_info("The Jailhouse is opening.\n");
+	pr_info("The AxVisor is opening.\n");
 
 	return 0;
 
@@ -770,7 +784,7 @@ static int jailhouse_cmd_disable(void)
 	jailhouse_enabled = false;
 	module_put(THIS_MODULE);
 
-	pr_info("The Jailhouse was closed.\n");
+	pr_info("The AxVisor was closed.\n");
 
 unlock_out:
 	mutex_unlock(&jailhouse_lock);
