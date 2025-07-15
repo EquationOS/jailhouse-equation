@@ -29,8 +29,8 @@
 #define JAILHOUSE_DEVICE "/dev/jailhouse"
 
 // #define HV_PHYS_START 0x3a000000
-#define HV_PHYS_START 0x40000000
-#define HV_MEM_SIZE (256 << 20) // 128M
+#define HV_PHYS_START (0x40000000)
+#define HV_MEM_SIZE (0x40000000) // 1G
 
 #define RT_CPUS 1 // Set to 1 by default
 
