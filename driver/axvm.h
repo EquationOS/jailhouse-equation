@@ -43,6 +43,7 @@ struct axvm_create_arg {
 	__u64 ramdisk_load_hpa;
 };
 
+int arceos_axvm_load_image(struct jailhouse_preload_image *image);
 
 int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg);
 

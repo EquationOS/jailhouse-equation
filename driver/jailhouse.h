@@ -18,7 +18,7 @@ struct jailhouse_enable_args
 
 #define JAILHOUSE_ENABLE _IOW(0, 0, struct jailhouse_enable_args)
 #define JAILHOUSE_DISABLE _IO(0, 1)
-#define JAILHOUSE_AXVM_CREATE _IOW(0, 6, struct jailhouse_axvm_create)
+#define JAILHOUSE_AXVM_CREATE _IOW(0, 2, struct jailhouse_axvm_create)
 
 // #define JAILHOUSE_BASE 0xffffff0000000000UL
 #define JAILHOUSE_BASE 0xffffff8000000000UL
@@ -58,6 +58,13 @@ struct jailhouse_header
 };
 
 #define JAILHOUSE_FILE_MAXNUM	8
+
+struct jailhouse_preload_image {
+	__u64 source_address;
+	__u64 size;
+	__u64 target_address;
+	__u64 padding;
+};
 
 /**
  * Todo: We need to parse a cell configuration file similar to Jailhouse.

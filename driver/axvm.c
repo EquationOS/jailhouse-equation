@@ -12,8 +12,6 @@
 #include "ioremap.h"
 #include "hypercall.h"
 
-static cpumask_t offlined_cpus;
-
 
 /// @brief Load image from user address to target physical address provided by arceos-hv.
 /// @param image : Here we reuse the jailhouse_preload_image structure from Jailhouse.
@@ -79,7 +77,6 @@ int arceos_axvm_load_image(struct jailhouse_preload_image *image)
 ///		`jailhouse_axvm_create` need to be refactored.
 int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 {
-	unsigned int cpu;
 	struct jailhouse_axvm_create vm_cfg;
     int cpu_mask; 
 	int err = 0;
@@ -125,7 +122,7 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
     err = jailhouse_call_arg1(ARCEOS_HC_AXVM_CREATE_CFG, arg_phys_addr);
 	if (err < 0) {
 		pr_err("[%s] Failed in JAILHOUSE_AXVM_CREATE\n", __func__);
-		goto error_cpu_online;
+		goto error_free_arg;
 	}
 	
 	pr_info("[%s] JAILHOUSE_AXVM_CREATE VM %d success\n", 
@@ -152,7 +149,7 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 		err = arceos_axvm_load_image(&bios_image);
 		if (err < 0) {
 			pr_err("[%s] Failed in arceos_axvm_load_image bios_image\n", __func__);
-			goto error_cpu_online;
+			goto error_free_arg;
 		}
 	}
 	
@@ -168,7 +165,7 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 		err = arceos_axvm_load_image(&kernel_image);
 		if (err < 0) {
 			pr_err("[%s] Failed in arceos_axvm_load_image kernel_image\n", __func__);
-			goto error_cpu_online;
+			goto error_free_arg;
 		}
 	}
 
@@ -184,7 +181,7 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 		err = arceos_axvm_load_image(&ramdisk_image);
 		if (err < 0) {
 			pr_err("[%s] Failed in arceos_axvm_load_image ramdisk_image\n", __func__);
-			goto error_cpu_online;
+			goto error_free_arg;
 		}
 	}
 
@@ -196,15 +193,8 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 
 	return err;
 
-error_cpu_online:
+error_free_arg:
 	pr_err("create axvm failed err:%d\n", err);
-	for (cpu = 0; cpu < sizeof(cpu_mask) * 8; cpu++) {
-        if (cpu_mask & (1 << cpu))  {
-			if (!cpu_online(cpu) && cpu_up(cpu) == 0)
-				cpumask_clear_cpu(cpu, &offlined_cpus);
-			cpumask_set_cpu(cpu, &root_cell->cpus_assigned);
-		}
-	}
 	kfree(arceos_hvc_axvm_create);
 	return err;
 }
