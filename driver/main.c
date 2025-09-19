@@ -38,6 +38,8 @@
 #include "ioremap.h"
 #include "jailhouse.h"
 
+#include "axvm.h"
+
 #ifdef CONFIG_X86_32
 #error 64-bit kernel required!
 #endif
@@ -114,8 +116,8 @@ static void init_hypercall(void) {}
 		size, flags, start, end, __builtin_return_address(0))
 #endif
 
-void *
-jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size);
+// void *
+// jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size);
 
 void *
 jailhouse_ioremap(phys_addr_t phys, unsigned long virt, unsigned long size)
@@ -804,6 +806,9 @@ jailhouse_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 		break;
 	case JAILHOUSE_DISABLE:
 		err = jailhouse_cmd_disable();
+		break;
+	case JAILHOUSE_AXVM_CREATE:
+		err = arceos_cmd_axvm_create((struct jailhouse_axvm_create __user *)arg);
 		break;
 	default:
 		err = -EINVAL;

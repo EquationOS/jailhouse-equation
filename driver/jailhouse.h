@@ -18,6 +18,7 @@ struct jailhouse_enable_args
 
 #define JAILHOUSE_ENABLE _IOW(0, 0, struct jailhouse_enable_args)
 #define JAILHOUSE_DISABLE _IO(0, 1)
+#define JAILHOUSE_AXVM_CREATE _IOW(0, 6, struct jailhouse_axvm_create)
 
 // #define JAILHOUSE_BASE 0xffffff0000000000UL
 #define JAILHOUSE_BASE 0xffffff8000000000UL
@@ -54,6 +55,28 @@ struct jailhouse_header
 	 * call the entry function and run the guest.
 	 * @note Filled by Linux loader driver before entry. */
 	unsigned int rt_cpus;
+};
+
+#define JAILHOUSE_FILE_MAXNUM	8
+
+/**
+ * Todo: We need to parse a cell configuration file similar to Jailhouse.
+ * 	which can be reused.
+ * 	This is just a ugly lazy implementation.
+*/ 
+struct jailhouse_axvm_create {
+	// CPU MASK.
+	__u64 cpu_mask;
+	// VM_TYPE.
+	__u32 type;
+	// name_addr for each image.
+	__u64 name_addr[JAILHOUSE_FILE_MAXNUM];
+	// name_size for each image.
+	__u64 name_size[JAILHOUSE_FILE_MAXNUM];
+	// user addr for each image.
+	__u64 img_addr[JAILHOUSE_FILE_MAXNUM];
+	// size for each image.
+	__u64 img_size[JAILHOUSE_FILE_MAXNUM];
 };
 
 #endif /* !_JAILHOUSE_DRIVER_H */
