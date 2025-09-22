@@ -2,45 +2,37 @@
 #define _JAILHOUSE_DRIVER_AXVM_H
 
 #include <linux/cpumask.h>
-#include <linux/list.h>
 #include <linux/kobject.h>
+#include <linux/list.h>
 #include <linux/uaccess.h>
 
 #include "jailhouse.h"
 
-#define ARCEOS_HC_AXVM_CREATE_CFG		0x101
-#define ARCEOS_HC_AXVM_BOOT             0x102
+#define ARCEOS_HC_AXVM_CREATE_CFG 0x101
+#define ARCEOS_HC_AXVM_BOOT 0x102
 
-/** The struct used for parameter passing between the kernel module and ArceOS hypervisor.
- * This structure should have the same memory layout as the `AxVMCreateArg` structure in ArceOS. 
- * See arceos/modules/axvm/src/hvc.rs
+/** The struct used for parameter passing between the kernel module and ArceOS
+ * hypervisor. This structure should have the same memory layout as the
+ * `AxVMCreateArg` structure in ArceOS. See arceos/modules/axvm/src/hvc.rs
  */
-struct axvm_create_arg {
-    // VM ID, set by ArceOS hypervisor.
+struct axhvc_create_vm_arg
+{
+	// VM ID, set by ArceOS hypervisor.
 	__u64 vm_id;
-    // Reserved.
-	__u64 vm_type;
-    // VM cpu mask.
-	__u64 cpu_mask;
-	// VM entry point.
-	__u64 vm_entry_point;
 
+	// Configuration file loaded guest physical address.
+	__u64 cfg_file_gpa;
+	// Configuration file size.
+	__u64 cfg_file_size;
+
+	// Following fields should be set by AxVisor.
+
+	// Kernel image loaded target guest physical address.
+	__u64 kernel_load_gpa;
 	// BIOS image loaded target guest physical address.
-    __u64 bios_load_gpa;
-    // Kernel image loaded target guest physical address.
-    __u64 kernel_load_gpa;
-    // Ramdisk image loaded target guest physical address.
-    __u64 ramdisk_load_gpa;
-
-    // Hypervisor physical load address of BIOS, set by ArceOS hypervisor
-	// We need to carefully consider the mapping of this kind of address.
-	__u64 bios_load_hpa;
-	// Hypervisor physical load address of kernel image, set by ArceOS hypervisor.
-	// We need to carefully consider the mapping of this kind of address.
-	__u64 kernel_load_hpa;
-    // Hypervisor physical load address of ramdisk image, set by ArceOS hypervisor.
-	// We need to carefully consider the mapping of this kind of address.
-	__u64 ramdisk_load_hpa;
+	__u64 bios_load_gpa;
+	// Ramdisk image loaded target guest physical address.
+	__u64 ramdisk_load_gpa;
 };
 
 int arceos_axvm_load_image(struct jailhouse_preload_image *image);

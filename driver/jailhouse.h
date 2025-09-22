@@ -57,33 +57,36 @@ struct jailhouse_header
 	unsigned int rt_cpus;
 };
 
-#define JAILHOUSE_FILE_MAXNUM	8
+#define JAILHOUSE_FILE_MAXNUM 8
 
-struct jailhouse_preload_image {
+struct jailhouse_preload_image
+{
 	__u64 source_address;
 	__u64 size;
 	__u64 target_address;
 	__u64 padding;
 };
 
-/**
- * Todo: We need to parse a cell configuration file similar to Jailhouse.
- * 	which can be reused.
- * 	This is just a ugly lazy implementation.
-*/ 
-struct jailhouse_axvm_create {
-	// CPU MASK.
-	__u64 cpu_mask;
-	// VM_TYPE.
-	__u32 type;
-	// name_addr for each image.
-	__u64 name_addr[JAILHOUSE_FILE_MAXNUM];
-	// name_size for each image.
-	__u64 name_size[JAILHOUSE_FILE_MAXNUM];
-	// user addr for each image.
-	__u64 img_addr[JAILHOUSE_FILE_MAXNUM];
-	// size for each image.
-	__u64 img_size[JAILHOUSE_FILE_MAXNUM];
+struct jailhouse_axvm_create
+{
+	// VM id
+	__u64 vm_id;
+	// Kernel image addr
+	__u64 kernel_image_addr;
+	// Kernel image size
+	__u64 kernel_image_size;
+	// Bios image addr
+	__u64 bios_image_addr;
+	// Bios image size
+	__u64 bios_image_size;
+	// Ramdisk image addr
+	__u64 ramdisk_image_addr;
+	// Ramdisk image size
+	__u64 ramdisk_image_size;
+	// Config file addr
+	__u64 config_addr;
+	// Config file size
+	__u64 config_size;
 };
 
 #endif /* !_JAILHOUSE_DRIVER_H */
