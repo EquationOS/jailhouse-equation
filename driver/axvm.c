@@ -82,10 +82,9 @@ int arceos_axvm_load_image(struct jailhouse_preload_image *image)
 
 /// @brief Create axvm config through HVC.
 /// @param arg : Pointer to the user-provided VM creation information..
-///		`jailhouse_axvm_create` need to be refactored.
-int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
+int arceos_cmd_axvm_create(struct axioctl_create_vm_arg __user *arg)
 {
-	struct jailhouse_axvm_create vm_cfg;
+	struct axioctl_create_vm_arg vm_cfg;
 	int err = 0;
 	int vm_id = 0;
 
@@ -99,8 +98,7 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 	if (copy_from_user(&vm_cfg, arg, sizeof(vm_cfg)))
 		return -EFAULT;
 
-	axhvc_axvm_create =
-		kmalloc(sizeof(struct axhvc_create_vm_arg), GFP_USER | __GFP_NOWARN);
+	axhvc_axvm_create = kmalloc(sizeof(struct axhvc_create_vm_arg), GFP_KERNEL);
 
 	if (!axhvc_axvm_create)
 	{
@@ -110,8 +108,12 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 
 	axhvc_axvm_create->vm_id = 0;
 
-	cfg_file_base =
-		kmalloc(axhvc_axvm_create->cfg_file_size, GFP_USER | __GFP_NOWARN);
+	pr_err(
+		"%s: cfg_file@ 0x%llx cfg_file_size 0x%llx\n", __func__,
+		vm_cfg.config_addr, vm_cfg.config_size);
+
+	// Allocate memory for config file
+	cfg_file_base = kmalloc(vm_cfg.config_size, GFP_KERNEL);
 
 	if (!cfg_file_base)
 	{
@@ -121,24 +123,34 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 	}
 
 	if (copy_from_user(
-			&cfg_file_base, (void *)vm_cfg.config_addr, vm_cfg.config_size))
+			cfg_file_base, (void __user *)vm_cfg.config_addr,
+			vm_cfg.config_size))
 	{
 		err = -EFAULT;
+		pr_err("copy_from_user for cfg_file_base failed\n");
 		goto error_free_cfg;
 	}
 
 	axhvc_axvm_create->cfg_file_gpa = __pa(cfg_file_base);
 	axhvc_axvm_create->cfg_file_size = vm_cfg.config_size;
 
+	axhvc_axvm_create->kernel_image_size = vm_cfg.kernel_image_size;
+	axhvc_axvm_create->bios_image_size = vm_cfg.bios_image_size;
+	axhvc_axvm_create->ramdisk_image_size = vm_cfg.ramdisk_image_size;
+
 	pr_err(
 		"%s: cfg_file_gpa 0x%llx, size 0x%llx\n", __func__,
 		axhvc_axvm_create->cfg_file_gpa, axhvc_axvm_create->cfg_file_size);
+	pr_err(
+		"%s:\n\tkernel_image_size 0x%llx\n\tbios_image_size 0x%llx\n\t"
+		"ramdisk_image_size 0x%llx\n",
+		__func__, axhvc_axvm_create->kernel_image_size,
+		axhvc_axvm_create->bios_image_size,
+		axhvc_axvm_create->ramdisk_image_size);
 
-	// This field should be set by hypervisor.
+	// These fields should be set by hypervisor.
 	axhvc_axvm_create->kernel_load_gpa = 0xdeadbeef;
-	// This field should be set by hypervisor.
 	axhvc_axvm_create->bios_load_gpa = 0xdeadbeef;
-	// This field should be set by hypervisor.
 	axhvc_axvm_create->ramdisk_load_gpa = 0xdeadbeef;
 
 	arg_phys_addr = __pa(axhvc_axvm_create);
@@ -146,12 +158,12 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 	err = jailhouse_call_arg1(ARCEOS_HC_AXVM_CREATE_CFG, arg_phys_addr);
 	if (err < 0)
 	{
-		pr_err("[%s] Failed in JAILHOUSE_AXVM_CREATE\n", __func__);
+		pr_err("[%s] Failed in AXIOCTL_CREATE_VM\n", __func__);
 		goto error_free_cfg;
 	}
 
 	pr_info(
-		"[%s] JAILHOUSE_AXVM_CREATE VM %d success\n", __func__,
+		"[%s] AXIOCTL_CREATE_VM VM %d success\n", __func__,
 		(int)axhvc_axvm_create->vm_id);
 	pr_info(
 		"[%s] VM [%d] bios_load_gpa 0x%llx\n", __func__,
@@ -163,6 +175,8 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 		"[%s] VM [%d] ramdisk_load_gpa 0x%llx\n", __func__,
 		(int)axhvc_axvm_create->vm_id, axhvc_axvm_create->ramdisk_load_gpa);
 	vm_id = (int)axhvc_axvm_create->vm_id;
+
+	vm_cfg.vm_id = vm_id;
 
 	// Load kernel image
 	if (vm_cfg.kernel_image_size != 0)
@@ -239,6 +253,19 @@ int arceos_cmd_axvm_create(struct jailhouse_axvm_create __user *arg)
 
 	err = jailhouse_call_arg1(ARCEOS_HC_AXVM_BOOT, (unsigned long)vm_id);
 
+	if (err < 0)
+	{
+		pr_err("[%s] Failed in AXIOCTL_BOOT_VM\n", __func__);
+		goto error_free_cfg;
+	}
+
+	if (copy_to_user(arg, &vm_cfg, sizeof(vm_cfg)))
+	{
+		err = -EFAULT;
+		goto error_free_cfg;
+	}
+
+	kfree(cfg_file_base);
 	kfree(axhvc_axvm_create);
 
 	return err;

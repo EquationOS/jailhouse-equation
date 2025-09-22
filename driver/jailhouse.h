@@ -18,7 +18,7 @@ struct jailhouse_enable_args
 
 #define JAILHOUSE_ENABLE _IOW(0, 0, struct jailhouse_enable_args)
 #define JAILHOUSE_DISABLE _IO(0, 1)
-#define JAILHOUSE_AXVM_CREATE _IOW(0, 2, struct jailhouse_axvm_create)
+#define JAILHOUSE_AXVM_CREATE _IOW(0, 0x11, struct axioctl_create_vm_arg)
 
 // #define JAILHOUSE_BASE 0xffffff0000000000UL
 #define JAILHOUSE_BASE 0xffffff8000000000UL
@@ -67,7 +67,7 @@ struct jailhouse_preload_image
 	__u64 padding;
 };
 
-struct jailhouse_axvm_create
+struct axioctl_create_vm_arg
 {
 	// VM id
 	__u64 vm_id;

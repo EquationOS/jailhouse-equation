@@ -808,9 +808,10 @@ jailhouse_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 		err = jailhouse_cmd_disable();
 		break;
 	case JAILHOUSE_AXVM_CREATE:
-		err = arceos_cmd_axvm_create((struct jailhouse_axvm_create __user *)arg);
+		err = arceos_cmd_axvm_create((struct axioctl_create_vm_arg __user *)arg);
 		break;
 	default:
+		pr_err("jailhouse: unknown ioctl 0x%x\n", ioctl);
 		err = -EINVAL;
 		break;
 	}
