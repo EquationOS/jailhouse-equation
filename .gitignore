@@ -20,3 +20,5 @@ driver/jailhouse.ko
 tools/jailhouse
 *.s
 .vscode
+# clangd
+.cache
