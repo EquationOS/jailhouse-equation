@@ -613,11 +613,11 @@ static int jailhouse_cmd_enable(struct jailhouse_enable_args __user *arg)
 		}
 	}
 
-	for (cpu = 0; cpu < max_cpus; cpu++)
-	{
-		bool online = cpu_online(cpu);
-		pr_err("CPU: %d is %s\n", cpu, online ? "online" : "offline");
-	}
+	// for (cpu = 0; cpu < max_cpus; cpu++)
+	// {
+	// 	bool online = cpu_online(cpu);
+	// 	pr_err("CPU: %d is %s\n", cpu, online ? "online" : "offline");
+	// }
 
 	pr_err(
 		"Before entering hypervisor: max_cpus=%d, rt_cpus=%d, "
@@ -694,7 +694,7 @@ static void leave_hypervisor(void *info)
 
 	unsigned int cpu = smp_processor_id();
 
-	pr_err("CPU: %d is leaving hypervisor\n", cpu);
+	// pr_err("CPU: %d is leaving hypervisor\n", cpu);
 
 	// /* Touch each hypervisor page we may need during the switch so that
 	//  * the active mm definitely contains all mappings. At least x86 does
