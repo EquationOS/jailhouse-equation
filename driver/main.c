@@ -876,6 +876,10 @@ static int __init jailhouse_init(void)
 	RESOLVE_EXTERNAL_SYMBOL(__p4d_alloc);
 	RESOLVE_EXTERNAL_SYMBOL(__pud_alloc);
 	RESOLVE_EXTERNAL_SYMBOL(__pmd_alloc);
+	arch_sync_kernel_mappings_sym =
+		(void *)generic_kallsyms_lookup_name("arch_sync_kernel_mappings");
+	if (!arch_sync_kernel_mappings_sym)
+		pr_warn("Failed to resolve symbol arch_sync_kernel_mappings\n");
 
 	RESOLVE_EXTERNAL_SYMBOL(cpu_maps_update_begin);
 	RESOLVE_EXTERNAL_SYMBOL(cpu_maps_update_done);

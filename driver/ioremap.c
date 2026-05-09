@@ -23,6 +23,7 @@ typeof(pmd_free_pte_page) *pmd_free_pte_page_sym;
 typeof(__p4d_alloc) *__p4d_alloc_sym;
 typeof(__pud_alloc) *__pud_alloc_sym;
 typeof(__pmd_alloc) *__pmd_alloc_sym;
+void (*arch_sync_kernel_mappings_sym)(unsigned long start, unsigned long end);
 
 /*** Page table manipulation functions ***/
 static int vmap_pte_range(
@@ -254,8 +255,8 @@ static int vmap_range_noflush(
 			break;
 	} while (pgd++, phys_addr += (next - addr), addr = next, addr != end);
 
-	if (mask & ARCH_PAGE_TABLE_SYNC_MASK)
-		arch_sync_kernel_mappings(start, end);
+	if (mask & ARCH_PAGE_TABLE_SYNC_MASK && arch_sync_kernel_mappings_sym)
+		arch_sync_kernel_mappings_sym(start, end);
 
 	return err;
 }
