@@ -23,6 +23,9 @@ typeof(pmd_free_pte_page) *pmd_free_pte_page_sym;
 typeof(__p4d_alloc) *__p4d_alloc_sym;
 typeof(__pud_alloc) *__pud_alloc_sym;
 typeof(__pmd_alloc) *__pmd_alloc_sym;
+/* Not exported to modules; live on x86_64 since 6.17 re-defined
+ * ARCH_PAGE_TABLE_SYNC_MASK (it was 0 before, compiling the call out). */
+typeof(arch_sync_kernel_mappings) *arch_sync_kernel_mappings_sym;
 
 /*** Page table manipulation functions ***/
 static int vmap_pte_range(
@@ -255,7 +258,7 @@ static int vmap_range_noflush(
 	} while (pgd++, phys_addr += (next - addr), addr = next, addr != end);
 
 	if (mask & ARCH_PAGE_TABLE_SYNC_MASK)
-		arch_sync_kernel_mappings(start, end);
+		arch_sync_kernel_mappings_sym(start, end);
 
 	return err;
 }

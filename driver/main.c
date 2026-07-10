@@ -876,6 +876,7 @@ static int __init jailhouse_init(void)
 	RESOLVE_EXTERNAL_SYMBOL(__p4d_alloc);
 	RESOLVE_EXTERNAL_SYMBOL(__pud_alloc);
 	RESOLVE_EXTERNAL_SYMBOL(__pmd_alloc);
+	RESOLVE_EXTERNAL_SYMBOL(arch_sync_kernel_mappings);
 
 	RESOLVE_EXTERNAL_SYMBOL(cpu_maps_update_begin);
 	RESOLVE_EXTERNAL_SYMBOL(cpu_maps_update_done);
